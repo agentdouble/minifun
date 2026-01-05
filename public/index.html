@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Vecteur Zero - FPS LAN</title>
+    <link rel="stylesheet" href="style.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Space+Mono:wght@400;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="overlay" class="overlay">
+      <div class="panel">
+        <p class="eyebrow">FPS MULTIJOUEUR LAN</p>
+        <h1>Vecteur Zero</h1>
+        <p class="subtitle">
+          Affrontements rapides, hitboxes precises, mouvements responsifs. Invite tes potes sur le reseau local et lance la partie.
+        </p>
+        <div class="controls">
+          <div>
+            <span>ZQSD / WASD</span>
+            <small>Deplacement</small>
+          </div>
+          <div>
+            <span>Souris</span>
+            <small>Viser</small>
+          </div>
+          <div>
+            <span>Clic gauche</span>
+            <small>Tirer</small>
+          </div>
+          <div>
+            <span>1 2 3</span>
+            <small>Changer d'arme</small>
+          </div>
+          <div>
+            <span>Shift</span>
+            <small>Sprint</small>
+          </div>
+          <div>
+            <span>Espace</span>
+            <small>Sauter</small>
+          </div>
+          <div>
+            <span>R</span>
+            <small>Recharger</small>
+          </div>
+        </div>
+        <button id="play">Jouer</button>
+        <p class="hint">Echap pour libere la souris</p>
+      </div>
+    </div>
+
+    <div id="hud" class="hud">
+      <div class="hud-left">
+        <div id="health" class="stat">100 PV</div>
+        <div id="weapon" class="stat">Fusil</div>
+        <div id="ammo" class="stat">30 / 30</div>
+      </div>
+      <div id="feed" class="feed"></div>
+      <div id="scoreboard" class="scoreboard"></div>
+      <div id="hitmarker" class="hitmarker">+</div>
+    </div>
+
+    <div id="crosshair" class="crosshair"></div>
+
+    <script type="module" src="main.js"></script>
+  </body>
+</html>

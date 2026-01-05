@@ -1,0 +1,242 @@
+:root {
+  --bg: #0f1115;
+  --panel: rgba(15, 18, 26, 0.92);
+  --accent: #f7c944;
+  --accent-2: #ff6b6b;
+  --text: #e6e9ef;
+  --muted: #9aa4b2;
+  --hud: rgba(6, 8, 12, 0.8);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: "Space Grotesk", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at top, rgba(41, 47, 60, 0.9), rgba(8, 10, 15, 0.98));
+  display: grid;
+  place-items: center;
+  z-index: 10;
+  transition: opacity 0.2s ease;
+}
+
+.overlay.hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.panel {
+  width: min(560px, 90vw);
+  padding: 32px 36px;
+  border: 1px solid rgba(247, 201, 68, 0.2);
+  border-radius: 24px;
+  background: var(--panel);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.eyebrow {
+  letter-spacing: 0.3em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: var(--muted);
+  margin: 0 0 8px;
+}
+
+.panel h1 {
+  font-size: 2.6rem;
+  margin: 0 0 12px;
+}
+
+.subtitle {
+  margin: 0 0 20px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 18px;
+  margin-bottom: 24px;
+}
+
+.controls div {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: "Space Mono", monospace;
+  font-size: 0.82rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.controls span {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.controls small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+button#play {
+  width: 100%;
+  border: none;
+  padding: 12px 18px;
+  font-size: 1rem;
+  font-weight: 700;
+  border-radius: 999px;
+  color: #121212;
+  background: linear-gradient(120deg, var(--accent), #ffea9e);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+button#play:hover {
+  transform: translateY(-2px);
+}
+
+.hint {
+  margin: 12px 0 0;
+  font-size: 0.75rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  font-family: "Space Mono", monospace;
+  text-transform: uppercase;
+}
+
+.hud-left {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.stat {
+  background: var(--hud);
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+}
+
+.feed {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: right;
+  font-size: 0.75rem;
+}
+
+.scoreboard {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  background: var(--hud);
+  padding: 10px 14px;
+  border-radius: 12px;
+  min-width: 160px;
+  font-size: 0.75rem;
+}
+
+.scoreboard div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.scoreboard div:last-child {
+  margin-bottom: 0;
+}
+
+.crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 20px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+}
+
+.crosshair::before,
+.crosshair::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.crosshair::before {
+  width: 2px;
+  height: 16px;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+}
+
+.crosshair::after {
+  height: 2px;
+  width: 16px;
+  top: 50%;
+  left: 2px;
+  transform: translateY(-50%);
+}
+
+.hitmarker {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%) scale(0.6);
+  font-size: 28px;
+  color: var(--accent-2);
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.hitmarker.active {
+  opacity: 1;
+  transform: translate(-50%, -50%) scale(1);
+}
+
+@media (max-width: 700px) {
+  .panel {
+    padding: 24px;
+  }
+
+  .panel h1 {
+    font-size: 2rem;
+  }
+
+  .controls {
+    grid-template-columns: 1fr;
+  }
+}
