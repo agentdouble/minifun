@@ -86,7 +86,18 @@ const MAP = {
     { id: "crate-b", position: { x: 8, y: 1.2, z: 6 }, size: { x: 3, y: 2.4, z: 3 } },
     { id: "wall-a", position: { x: -14, y: 1.4, z: 10 }, size: { x: 10, y: 2.8, z: 1.5 } },
     { id: "wall-b", position: { x: 12, y: 1.4, z: -12 }, size: { x: 10, y: 2.8, z: 1.5 } },
-    { id: "pillar", position: { x: 0, y: 1.8, z: -16 }, size: { x: 2.8, y: 3.6, z: 2.8 } }
+    { id: "pillar", position: { x: 0, y: 1.8, z: -16 }, size: { x: 2.8, y: 3.6, z: 2.8 } },
+
+    // Escalier + plateforme (cote gauche)
+    { id: "stairs-left-step-1", position: { x: -28, y: 0.125, z: 6.6 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-step-2", position: { x: -28, y: 0.375, z: 7.8 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-step-3", position: { x: -28, y: 0.625, z: 9.0 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-step-4", position: { x: -28, y: 0.875, z: 10.2 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-step-5", position: { x: -28, y: 1.125, z: 11.4 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-step-6", position: { x: -28, y: 1.375, z: 12.6 }, size: { x: 6, y: 0.25, z: 1.2 } },
+    { id: "stairs-left-platform", position: { x: -28, y: 1.65, z: 17.2 }, size: { x: 8, y: 0.3, z: 8 } },
+    { id: "stairs-left-rail-n", position: { x: -28, y: 2.1, z: 21.1 }, size: { x: 8, y: 0.9, z: 0.3 } },
+    { id: "stairs-left-rail-w", position: { x: -31.85, y: 2.1, z: 17.2 }, size: { x: 0.3, y: 0.9, z: 8 } }
   ],
   targets: [
     { id: "target-1", position: { x: -28, y: 1.4, z: -10 }, radius: 0.55 },

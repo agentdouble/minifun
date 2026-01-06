@@ -47,6 +47,7 @@ const RECOIL_PROFILES = {
   sniper: { back: 0.09, up: 0.03, side: 0.01, maxBack: 0.16 },
   shotgun: { back: 0.12, up: 0.045, side: 0.016, maxBack: 0.2 }
 };
+const VIEW_MODEL_MUZZLE_LOCAL = new THREE.Vector3(0, 0, -0.3);
 
 function dampValue(value, target, lambda, dt) {
   const t = 1 - Math.exp(-lambda * dt);
@@ -80,6 +81,14 @@ function updateRecoil(dt) {
   applyViewModelTransform();
 }
 
+function getViewModelMuzzleWorldPosition(out) {
+  if (!out) {
+    out = new THREE.Vector3();
+  }
+  viewModel.barrel.updateWorldMatrix(true, false);
+  return out.copy(VIEW_MODEL_MUZZLE_LOCAL).applyMatrix4(viewModel.barrel.matrixWorld);
+}
+
 const groundGeometry = new THREE.PlaneGeometry(120, 120);
 const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x1b212e });
 const ground = new THREE.Mesh(groundGeometry, groundMaterial);
@@ -91,6 +100,8 @@ scene.add(grid);
 
 const PLAYER_RADIUS = 0.45;
 const EYE_HEIGHT = 1.6;
+const PLAYER_HEIGHT = 1.8;
+const STEP_HEIGHT = 0.55;
 
 const player = {
   position: new THREE.Vector3(0, 0, 0),
@@ -690,30 +701,32 @@ function spawnMuzzleFlash(origin, dir, options = {}) {
 }
 
 function renderShot(msg) {
-  const origin = new THREE.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
+  const serverOrigin = new THREE.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
   const isLocal = msg.shooterId === localId;
   const traces = msg.traces || [];
+  const visualOrigin = isLocal ? getViewModelMuzzleWorldPosition() : serverOrigin;
+  const muzzleKick = isLocal ? 0.02 : 0.35;
   if (traces.length > 0) {
     const baseDir = new THREE.Vector3(
       traces[0].dir.x,
       traces[0].dir.y,
       traces[0].dir.z
     );
-    spawnMuzzleFlash(origin, baseDir, {
-      muzzleOffset: 0.35,
-      sideOffset: isLocal ? 0.06 : 0
+    spawnMuzzleFlash(visualOrigin, baseDir, {
+      muzzleOffset: muzzleKick,
+      sideOffset: 0
     });
   }
   for (const trace of traces) {
     const dir = new THREE.Vector3(trace.dir.x, trace.dir.y, trace.dir.z);
     const distance = typeof trace.distance === "number" ? trace.distance : 0;
-    spawnTracer(origin, dir, distance, {
-      muzzleOffset: 0.35,
-      sideOffset: isLocal ? 0.06 : 0,
+    spawnTracer(visualOrigin, dir, distance, {
+      muzzleOffset: muzzleKick,
+      sideOffset: 0,
       maxLength: isLocal ? 8 : distance
     });
     if (trace.impact) {
-      const end = origin.clone().add(dir.clone().multiplyScalar(distance));
+      const end = serverOrigin.clone().add(dir.clone().multiplyScalar(distance));
       spawnImpact(end, trace.impact.type);
       if (trace.impact.type === "target" && trace.impact.targetId) {
         flashTarget(trace.impact.targetId);
@@ -809,32 +822,73 @@ function accelerate(wishDir, wishSpeed, accel, dt) {
   player.velocity.addScaledVector(wishDir, accelSpeed);
 }
 
-function resolveCollisions() {
+function resolveCollisions(previousBottomY, wasOnGround) {
+  let onPlatform = false;
+  const radiusSq = PLAYER_RADIUS * PLAYER_RADIUS;
+
   for (const obstacle of obstacles) {
-    if (player.position.y > obstacle.max.y + 0.5) {
+    const playerTopY = player.position.y + PLAYER_HEIGHT;
+    if (player.position.y >= obstacle.max.y && player.velocity.y <= 0) {
+      // Pas de collision latérale quand on est au-dessus.
+    } else if (playerTopY <= obstacle.min.y) {
       continue;
     }
+
     const nearestX = Math.max(obstacle.min.x, Math.min(player.position.x, obstacle.max.x));
     const nearestZ = Math.max(obstacle.min.z, Math.min(player.position.z, obstacle.max.z));
     const dx = player.position.x - nearestX;
     const dz = player.position.z - nearestZ;
     const distSq = dx * dx + dz * dz;
-    const radiusSq = PLAYER_RADIUS * PLAYER_RADIUS;
 
-    if (distSq < radiusSq) {
-      const dist = Math.sqrt(distSq) || 0.0001;
-      const push = PLAYER_RADIUS - dist;
-      const nx = dx / dist;
-      const nz = dz / dist;
-      player.position.x += nx * push;
-      player.position.z += nz * push;
+    if (distSq >= radiusSq) {
+      continue;
+    }
 
-      const dot = player.velocity.x * nx + player.velocity.z * nz;
-      if (dot < 0) {
-        player.velocity.x -= dot * nx;
-        player.velocity.z -= dot * nz;
+    const obstacleTop = obstacle.max.y;
+    const obstacleBottom = obstacle.min.y;
+    const verticalOverlap = player.position.y < obstacleTop && playerTopY > obstacleBottom;
+
+    if (player.velocity.y <= 0) {
+      const crossesTop =
+        previousBottomY >= obstacleTop - 1e-4 && player.position.y < obstacleTop;
+      if (crossesTop) {
+        player.position.y = obstacleTop;
+        player.velocity.y = 0;
+        onPlatform = true;
+        continue;
       }
     }
+
+    if (wasOnGround && player.velocity.y <= 0) {
+      const stepDelta = obstacleTop - player.position.y;
+      if (stepDelta > 1e-4 && stepDelta <= STEP_HEIGHT) {
+        player.position.y = obstacleTop;
+        player.velocity.y = 0;
+        onPlatform = true;
+        continue;
+      }
+    }
+
+    if (!verticalOverlap) {
+      continue;
+    }
+
+    const dist = Math.sqrt(distSq) || 0.0001;
+    const push = PLAYER_RADIUS - dist;
+    const nx = dx / dist;
+    const nz = dz / dist;
+    player.position.x += nx * push;
+    player.position.z += nz * push;
+
+    const dot = player.velocity.x * nx + player.velocity.z * nz;
+    if (dot < 0) {
+      player.velocity.x -= dot * nx;
+      player.velocity.z -= dot * nz;
+    }
+  }
+
+  if (onPlatform) {
+    player.onGround = true;
   }
 }
 
@@ -844,6 +898,9 @@ function clampPositionToBounds() {
 }
 
 function updateMovement(dt) {
+  const wasOnGround = player.onGround;
+  const previousBottomY = player.position.y;
+
   if (localDead) {
     player.velocity.set(0, 0, 0);
     camera.position.set(
@@ -879,7 +936,7 @@ function updateMovement(dt) {
 
   const maxSpeed = input.sprint ? MOVEMENT.sprintSpeed : MOVEMENT.walkSpeed;
 
-  if (player.onGround) {
+  if (wasOnGround) {
     applyFriction(dt);
     accelerate(wishDir, maxSpeed, MOVEMENT.accel, dt);
   } else {
@@ -888,22 +945,19 @@ function updateMovement(dt) {
 
   player.velocity.y -= MOVEMENT.gravity * dt;
 
-  if (input.jump && player.onGround) {
+  if (input.jump && wasOnGround) {
     player.velocity.y = MOVEMENT.jumpVelocity;
-    player.onGround = false;
   }
 
   player.position.addScaledVector(player.velocity, dt);
 
-  if (player.position.y <= 0) {
+  player.onGround = false;
+  resolveCollisions(previousBottomY, wasOnGround);
+  if (!player.onGround && player.position.y <= 0) {
     player.position.y = 0;
     player.velocity.y = 0;
     player.onGround = true;
-  } else {
-    player.onGround = false;
   }
-
-  resolveCollisions();
   clampPositionToBounds();
 
   camera.position.set(
