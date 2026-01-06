@@ -27,6 +27,18 @@
             <p class="control-hint">Clique sur un raccourci pour le modifier.</p>
           </div>
           <div class="control-block">
+            <p class="control-title">Pseudo</p>
+            <input
+              id="player-name"
+              class="text-input"
+              type="text"
+              placeholder="Ton pseudo"
+              autocomplete="nickname"
+              maxlength="16"
+            />
+            <p class="control-hint">Visible dans le leaderboard (Tab).</p>
+          </div>
+          <div class="control-block">
             <p class="control-title">Sensibilite</p>
             <div class="sensitivity">
               <input
@@ -61,6 +73,7 @@
     </div>
 
     <div id="crosshair" class="crosshair"></div>
+    <div id="scope" class="scope"></div>
 
     <script type="module" src="main.js"></script>
   </body>

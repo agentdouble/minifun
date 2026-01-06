@@ -8,11 +8,17 @@ const ammoEl = document.getElementById("ammo");
 const scoreboardEl = document.getElementById("scoreboard");
 const feedEl = document.getElementById("feed");
 const hitmarkerEl = document.getElementById("hitmarker");
+const crosshairEl = document.getElementById("crosshair");
+const scopeEl = document.getElementById("scope");
+const nameInput = document.getElementById("player-name");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0d12);
 
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 250);
+const DEFAULT_FOV = camera.fov;
+const SCOPE_FOV = 28;
+const NAME_STORAGE_KEY = "vz_player_name";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -31,6 +37,48 @@ scene.add(dirLight);
 const viewModel = createViewModel();
 camera.add(viewModel.group);
 scene.add(camera);
+
+const viewModelBaseOffset = new THREE.Vector3().copy(viewModel.group.position);
+const recoilState = { x: 0, y: 0, z: 0 };
+const RECOIL_PROFILES = {
+  pistol: { back: 0.07, up: 0.025, side: 0.01, maxBack: 0.14 },
+  deagle: { back: 0.11, up: 0.04, side: 0.014, maxBack: 0.18 },
+  rifle: { back: 0.05, up: 0.018, side: 0.008, maxBack: 0.12 },
+  sniper: { back: 0.09, up: 0.03, side: 0.01, maxBack: 0.16 },
+  shotgun: { back: 0.12, up: 0.045, side: 0.016, maxBack: 0.2 }
+};
+
+function dampValue(value, target, lambda, dt) {
+  const t = 1 - Math.exp(-lambda * dt);
+  return THREE.MathUtils.lerp(value, target, t);
+}
+
+function applyViewModelTransform() {
+  viewModel.group.position.set(
+    viewModelBaseOffset.x + recoilState.x,
+    viewModelBaseOffset.y + recoilState.y,
+    viewModelBaseOffset.z + recoilState.z
+  );
+}
+
+function addRecoilImpulse(weaponKey) {
+  const profile = RECOIL_PROFILES[weaponKey] || RECOIL_PROFILES.rifle;
+  recoilState.z = Math.min(profile.maxBack ?? profile.back * 2, recoilState.z + profile.back);
+  recoilState.y = Math.min(profile.up * 2.2, recoilState.y + profile.up);
+  recoilState.x = THREE.MathUtils.clamp(
+    recoilState.x + (Math.random() - 0.5) * profile.side * 2,
+    -0.05,
+    0.05
+  );
+  applyViewModelTransform();
+}
+
+function updateRecoil(dt) {
+  recoilState.x = dampValue(recoilState.x, 0, 22, dt);
+  recoilState.y = dampValue(recoilState.y, 0, 22, dt);
+  recoilState.z = dampValue(recoilState.z, 0, 18, dt);
+  applyViewModelTransform();
+}
 
 const groundGeometry = new THREE.PlaneGeometry(120, 120);
 const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x1b212e });
@@ -115,11 +163,23 @@ const VIEW_MODEL_PROFILES = {
     barrelOffsetZ: -0.38,
     offset: { x: 0.42, y: -0.33, z: -0.68 }
   },
+  deagle: {
+    bodyScaleZ: 0.82,
+    barrelScaleZ: 0.7,
+    barrelOffsetZ: -0.42,
+    offset: { x: 0.43, y: -0.34, z: -0.72 }
+  },
   rifle: {
     bodyScaleZ: 1.15,
     barrelScaleZ: 1.35,
     barrelOffsetZ: -0.62,
     offset: { x: 0.46, y: -0.36, z: -0.95 }
+  },
+  sniper: {
+    bodyScaleZ: 1.25,
+    barrelScaleZ: 2.1,
+    barrelOffsetZ: -0.85,
+    offset: { x: 0.5, y: -0.37, z: -1.22 }
   },
   shotgun: {
     bodyScaleZ: 1.25,
@@ -142,6 +202,92 @@ let lastStateSent = 0;
 let connected = false;
 let localDead = false;
 let hasSpawned = false;
+let aimHeld = false;
+let aiming = false;
+let leaderboardHeld = false;
+let lastSentName = null;
+
+const LOOK_SENSITIVITY = {
+  normal: 0.002,
+  scoped: 0.0007
+};
+
+function setAiming(enabled) {
+  aiming = enabled;
+  if (scopeEl) {
+    scopeEl.classList.toggle("active", aiming);
+  }
+  if (crosshairEl) {
+    crosshairEl.classList.toggle("hidden", aiming);
+  }
+  viewModel.group.visible = !aiming;
+  camera.fov = aiming ? SCOPE_FOV : DEFAULT_FOV;
+  camera.updateProjectionMatrix();
+}
+
+function setLeaderboardVisible(visible) {
+  leaderboardHeld = visible;
+  if (scoreboardEl) {
+    scoreboardEl.classList.toggle("visible", visible);
+  }
+}
+
+function sanitizePlayerName(raw) {
+  if (typeof raw !== "string") {
+    return "";
+  }
+  return raw
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 16);
+}
+
+function getDesiredName() {
+  if (!nameInput) {
+    return "";
+  }
+  return sanitizePlayerName(nameInput.value);
+}
+
+function persistDesiredName(name) {
+  if (!nameInput) {
+    return;
+  }
+  if (name) {
+    localStorage.setItem(NAME_STORAGE_KEY, name);
+  } else {
+    localStorage.removeItem(NAME_STORAGE_KEY);
+  }
+}
+
+function sendNameIfPossible() {
+  if (!connected || !socket || socket.readyState !== 1 || !localId) {
+    persistDesiredName(getDesiredName());
+    return;
+  }
+  const name = getDesiredName();
+  persistDesiredName(name);
+  if (name === lastSentName) {
+    return;
+  }
+  socket.send(JSON.stringify({ type: "set_name", name }));
+  lastSentName = name;
+  if (nameInput) {
+    nameInput.value = name;
+  }
+}
+
+function refreshAiming() {
+  const shouldAim =
+    aimHeld &&
+    currentWeapon === "sniper" &&
+    document.pointerLockElement === canvas &&
+    !localDead;
+  if (shouldAim !== aiming) {
+    setAiming(shouldAim);
+  }
+}
 
 function initSocket() {
   socket = new WebSocket(`ws://${window.location.host}`);
@@ -163,6 +309,7 @@ function initSocket() {
       if (Array.isArray(msg.players)) {
         updatePlayers(msg.players);
       }
+      sendNameIfPossible();
     }
 
     if (msg.type === "player_join" && msg.player) {
@@ -334,6 +481,7 @@ function updatePlayers(players) {
     entry.targetPosition.set(p.position.x, p.position.y, p.position.z);
     entry.targetYaw = p.yaw || 0;
     entry.health = p.health;
+    entry.name = p.name || entry.name;
     entry.dead = p.dead;
     entry.mesh.visible = !p.dead;
   }
@@ -354,6 +502,8 @@ function updateLocalState(state) {
   if (typeof state.dead === "boolean") {
     if (state.dead && !localDead) {
       localDead = true;
+      aimHeld = false;
+      setAiming(false);
     }
     if (!state.dead && localDead) {
       localDead = false;
@@ -361,6 +511,7 @@ function updateLocalState(state) {
         player.position.set(state.position.x, state.position.y, state.position.z);
         player.velocity.set(0, 0, 0);
       }
+      refreshAiming();
     }
   }
   if (!hasSpawned && state.position) {
@@ -372,10 +523,28 @@ function updateLocalState(state) {
 function updateScoreboard(players) {
   const sorted = [...players].sort((a, b) => b.kills - a.kills || a.deaths - b.deaths);
   scoreboardEl.innerHTML = "";
+  const header = document.createElement("div");
+  header.className = "scoreboard-header";
+  const headerName = document.createElement("span");
+  headerName.textContent = "JOUEUR";
+  const headerScore = document.createElement("span");
+  headerScore.textContent = "K / D";
+  header.append(headerName, headerScore);
+  scoreboardEl.appendChild(header);
+
   for (const playerEntry of sorted) {
     const row = document.createElement("div");
-    const name = playerEntry.id === localId ? "Toi" : playerEntry.name;
-    row.innerHTML = `<span>${name}</span><span>${playerEntry.kills} / ${playerEntry.deaths}</span>`;
+    row.className = "scoreboard-row";
+    const nameSpan = document.createElement("span");
+    const baseName = playerEntry.name || `Joueur ${playerEntry.id}`;
+    nameSpan.textContent =
+      playerEntry.id === localId ? `${baseName} (TOI)` : baseName;
+    const scoreSpan = document.createElement("span");
+    scoreSpan.textContent = `${playerEntry.kills} / ${playerEntry.deaths}`;
+    row.append(nameSpan, scoreSpan);
+    if (playerEntry.id === localId) {
+      row.classList.add("local");
+    }
     scoreboardEl.appendChild(row);
   }
 }
@@ -421,10 +590,14 @@ function createViewModel() {
 
 function updateViewModelForWeapon(weaponKey) {
   const profile = VIEW_MODEL_PROFILES[weaponKey] || VIEW_MODEL_PROFILES.rifle;
-  viewModel.group.position.set(profile.offset.x, profile.offset.y, profile.offset.z);
+  viewModelBaseOffset.set(profile.offset.x, profile.offset.y, profile.offset.z);
+  recoilState.x = 0;
+  recoilState.y = 0;
+  recoilState.z = 0;
   viewModel.body.scale.set(1, 1, profile.bodyScaleZ);
   viewModel.barrel.scale.set(1, 1, profile.barrelScaleZ);
   viewModel.barrel.position.z = profile.barrelOffsetZ;
+  applyViewModelTransform();
 }
 
 function createPlayerMesh(color) {
@@ -819,6 +992,7 @@ function tryShoot(now) {
 
   state.lastShotAt = now;
   state.ammo -= 1;
+  addRecoilImpulse(currentWeapon);
 
   if (connected) {
     socket.send(JSON.stringify({ type: "shoot" }));
@@ -848,8 +1022,10 @@ function animate(now) {
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
 
+  refreshAiming();
   updateMovement(dt);
   updateWeapon(now);
+  updateRecoil(dt);
   updateRemotePlayers(dt);
   updateEffects(dt);
   sendState(now);
@@ -863,6 +1039,9 @@ function handlePointerLockChange() {
   overlay.classList.toggle("hidden", locked);
   if (!locked) {
     resetInput();
+    aimHeld = false;
+    setAiming(false);
+    setLeaderboardVisible(false);
   }
 }
 
@@ -873,23 +1052,51 @@ function matchesKey(event, keys, codes) {
 
 function connectControls() {
   playButton.addEventListener("click", () => {
+    sendNameIfPossible();
     canvas.requestPointerLock();
   });
 
   document.addEventListener("pointerlockchange", handlePointerLockChange);
+  window.addEventListener("contextmenu", (event) => event.preventDefault());
+
+  if (nameInput) {
+    const storedName = localStorage.getItem(NAME_STORAGE_KEY);
+    if (storedName) {
+      nameInput.value = storedName;
+    }
+    nameInput.addEventListener("blur", () => {
+      sendNameIfPossible();
+    });
+    nameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        sendNameIfPossible();
+        canvas.requestPointerLock();
+      }
+    });
+  }
 
   document.addEventListener("mousemove", (event) => {
     if (document.pointerLockElement !== canvas) {
       return;
     }
-    player.yaw -= event.movementX * 0.002;
-    player.pitch -= event.movementY * 0.002;
+    const sensitivity = aiming ? LOOK_SENSITIVITY.scoped : LOOK_SENSITIVITY.normal;
+    player.yaw -= event.movementX * sensitivity;
+    player.pitch -= event.movementY * sensitivity;
     player.pitch = Math.max(-1.3, Math.min(1.3, player.pitch));
   });
 
   window.addEventListener("mousedown", (event) => {
-    if (event.button === 0 && document.pointerLockElement === canvas) {
+    if (document.pointerLockElement !== canvas) {
+      return;
+    }
+    if (event.button === 0) {
       input.firing = true;
+      return;
+    }
+    if (event.button === 2) {
+      aimHeld = true;
+      refreshAiming();
     }
   });
 
@@ -897,9 +1104,18 @@ function connectControls() {
     if (event.button === 0) {
       input.firing = false;
     }
+    if (event.button === 2) {
+      aimHeld = false;
+      refreshAiming();
+    }
   });
 
   window.addEventListener("keydown", (event) => {
+    if (event.code === "Tab" && document.pointerLockElement === canvas) {
+      event.preventDefault();
+      setLeaderboardVisible(true);
+      return;
+    }
     if (matchesKey(event, ["w", "z"], ["KeyW", "KeyZ"])) {
       input.forward = true;
     } else if (matchesKey(event, ["s"], ["KeyS"])) {
@@ -927,6 +1143,12 @@ function connectControls() {
       case "Digit3":
         switchWeapon("shotgun");
         break;
+      case "Digit4":
+        switchWeapon("deagle");
+        break;
+      case "Digit5":
+        switchWeapon("sniper");
+        break;
       case "KeyR":
         beginReload(performance.now());
         break;
@@ -936,6 +1158,11 @@ function connectControls() {
   });
 
   window.addEventListener("keyup", (event) => {
+    if (event.code === "Tab" && document.pointerLockElement === canvas) {
+      event.preventDefault();
+      setLeaderboardVisible(false);
+      return;
+    }
     if (matchesKey(event, ["w", "z"], ["KeyW", "KeyZ"])) {
       input.forward = false;
     } else if (matchesKey(event, ["s"], ["KeyS"])) {
@@ -967,6 +1194,7 @@ function switchWeapon(weaponKey) {
   currentWeapon = weaponKey;
   updateWeaponHUD();
   updateViewModelForWeapon(weaponKey);
+  refreshAiming();
   if (connected) {
     socket.send(JSON.stringify({ type: "switch_weapon", weapon: weaponKey }));
   }

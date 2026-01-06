@@ -158,6 +158,28 @@ canvas {
   accent-color: var(--accent);
 }
 
+.text-input {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: "Space Mono", monospace;
+  font-size: 0.9rem;
+  outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.text-input::placeholder {
+  color: rgba(154, 164, 178, 0.8);
+}
+
+.text-input:focus {
+  border-color: rgba(247, 201, 68, 0.55);
+  background: rgba(247, 201, 68, 0.08);
+}
+
 button.secondary {
   border: 1px solid rgba(247, 201, 68, 0.35);
   background: transparent;
@@ -204,6 +226,7 @@ button#play:hover {
   pointer-events: none;
   font-family: "Space Mono", monospace;
   text-transform: uppercase;
+  z-index: 4;
 }
 
 .hud-left {
@@ -236,13 +259,26 @@ button#play:hover {
 
 .scoreboard {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  left: 50%;
+  top: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translate(-50%, -50%) translateY(12px);
   background: var(--hud);
-  padding: 10px 14px;
-  border-radius: 12px;
-  min-width: 160px;
-  font-size: 0.75rem;
+  padding: 14px 18px;
+  border-radius: 16px;
+  min-width: min(520px, calc(100vw - 64px));
+  max-width: min(680px, calc(100vw - 64px));
+  font-size: 0.85rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(10px);
+  opacity: 0;
+  transition: opacity 0.12s ease, transform 0.12s ease;
+}
+
+.scoreboard.visible {
+  opacity: 1;
+  transform: translate(-50%, -50%);
 }
 
 .scoreboard div {
@@ -256,6 +292,17 @@ button#play:hover {
   margin-bottom: 0;
 }
 
+.scoreboard-header {
+  color: var(--muted);
+  letter-spacing: 0.22em;
+  font-size: 0.7rem;
+  margin-bottom: 10px;
+}
+
+.scoreboard-row.local span:first-child {
+  color: var(--accent);
+}
+
 .crosshair {
   position: absolute;
   left: 50%;
@@ -263,6 +310,13 @@ button#play:hover {
   width: 20px;
   height: 20px;
   transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 3;
+  transition: opacity 0.12s ease;
+}
+
+.crosshair.hidden {
+  opacity: 0;
 }
 
 .crosshair::before,
@@ -286,6 +340,48 @@ button#play:hover {
   top: 50%;
   left: 2px;
   transform: translateY(-50%);
+}
+
+.scope {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 0%,
+    rgba(0, 0, 0, 0) 34%,
+    rgba(247, 201, 68, 0.45) 35%,
+    rgba(0, 0, 0, 0) 36%,
+    rgba(0, 0, 0, 0.92) 38%,
+    rgba(0, 0, 0, 0.92) 100%
+  );
+}
+
+.scope.active {
+  opacity: 1;
+}
+
+.scope::before,
+.scope::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  transform: translate(-50%, -50%);
+}
+
+.scope::before {
+  width: 2px;
+  height: 100%;
+}
+
+.scope::after {
+  height: 2px;
+  width: 100%;
 }
 
 .hitmarker {

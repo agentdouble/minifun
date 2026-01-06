@@ -24,6 +24,17 @@ const WEAPONS = {
     magazine: 12,
     reloadTime: 1.2
   },
+  deagle: {
+    label: "Deagle",
+    damage: 50,
+    headshot: 2,
+    range: 85,
+    fireRate: 0.5,
+    spread: 0.008,
+    pellets: 1,
+    magazine: 7,
+    reloadTime: 1.7
+  },
   rifle: {
     label: "Fusil",
     damage: 14,
@@ -34,6 +45,17 @@ const WEAPONS = {
     pellets: 1,
     magazine: 30,
     reloadTime: 1.6
+  },
+  sniper: {
+    label: "Sniper",
+    damage: 80,
+    headshot: 1.5,
+    range: 190,
+    fireRate: 1.2,
+    spread: 0.002,
+    pellets: 1,
+    magazine: 5,
+    reloadTime: 2.8
   },
   shotgun: {
     label: "Pompe",
@@ -128,6 +150,20 @@ function broadcastExcept(except, data) {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
+}
+
+function sanitizePlayerName(name, fallbackId) {
+  if (typeof name !== "string") {
+    return `Joueur ${fallbackId}`;
+  }
+  const cleaned = name
+    .replace(/[\u0000-\u001F\u007F]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!cleaned) {
+    return `Joueur ${fallbackId}`;
+  }
+  return cleaned.slice(0, 16);
 }
 
 // Convention alignee avec Three.js: yaw=0 regarde vers -Z.
@@ -476,6 +512,10 @@ wss.on("connection", (ws) => {
       if (typeof msg.weapon === "string" && WEAPONS[msg.weapon]) {
         current.weapon = msg.weapon;
       }
+    }
+
+    if (msg.type === "set_name") {
+      current.name = sanitizePlayerName(msg.name, current.id);
     }
 
     if (msg.type === "shoot") {
