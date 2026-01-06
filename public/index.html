@@ -21,33 +21,27 @@
           Affrontements rapides, hitboxes precises, mouvements responsifs. Invite tes potes sur le reseau local et lance la partie.
         </p>
         <div class="controls">
-          <div>
-            <span>ZQSD / WASD</span>
-            <small>Deplacement</small>
+          <div class="control-block">
+            <p class="control-title">Raccourcis</p>
+            <div id="bindings" class="bindings"></div>
+            <p class="control-hint">Clique sur un raccourci pour le modifier.</p>
           </div>
-          <div>
-            <span>Souris</span>
-            <small>Viser</small>
-          </div>
-          <div>
-            <span>Clic gauche</span>
-            <small>Tirer</small>
-          </div>
-          <div>
-            <span>1 2 3</span>
-            <small>Changer d'arme</small>
-          </div>
-          <div>
-            <span>Shift</span>
-            <small>Sprint</small>
-          </div>
-          <div>
-            <span>Espace</span>
-            <small>Sauter</small>
-          </div>
-          <div>
-            <span>R</span>
-            <small>Recharger</small>
+          <div class="control-block">
+            <p class="control-title">Sensibilite</p>
+            <div class="sensitivity">
+              <input
+                id="sensitivity"
+                type="range"
+                min="0.4"
+                max="3"
+                step="0.05"
+                value="1"
+              />
+              <span id="sensitivity-value">1.00x</span>
+            </div>
+            <button id="reset-settings" class="secondary" type="button">
+              Reinitialiser
+            </button>
           </div>
         </div>
         <button id="play">Jouer</button>

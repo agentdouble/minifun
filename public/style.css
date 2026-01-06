@@ -70,31 +70,108 @@ canvas {
 }
 
 .controls {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
   margin-bottom: 24px;
 }
 
-.controls div {
+.control-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.control-title {
+  margin: 0;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.control-hint {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.bindings {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+}
+
+.binding-row {
   padding: 10px 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.04);
   font-family: "Space Mono", monospace;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   display: flex;
-  flex-direction: column;
-  gap: 4px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
 }
 
-.controls span {
-  color: var(--accent);
-  font-weight: 700;
-}
-
-.controls small {
+.binding-row span {
   color: var(--muted);
-  font-size: 0.7rem;
+}
+
+.binding-key {
+  border: 1px solid rgba(247, 201, 68, 0.35);
+  background: rgba(247, 201, 68, 0.12);
+  color: var(--accent);
+  border-radius: 10px;
+  padding: 5px 10px;
+  font-family: "Space Mono", monospace;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.binding-key:hover {
+  transform: translateY(-1px);
+  background: rgba(247, 201, 68, 0.2);
+}
+
+.binding-key.listening {
+  background: var(--accent);
+  color: #121212;
+  border-color: var(--accent);
+}
+
+.sensitivity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  font-family: "Space Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.sensitivity input {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+button.secondary {
+  border: 1px solid rgba(247, 201, 68, 0.35);
+  background: transparent;
+  color: var(--accent);
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s ease, transform 0.2s ease;
+}
+
+button.secondary:hover {
+  background: rgba(247, 201, 68, 0.12);
+  transform: translateY(-1px);
 }
 
 button#play {
@@ -236,7 +313,7 @@ button#play:hover {
     font-size: 2rem;
   }
 
-  .controls {
+  .bindings {
     grid-template-columns: 1fr;
   }
 }

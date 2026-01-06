@@ -5,7 +5,7 @@ const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 20;
-const RESPAWN_DELAY_MS = 2000;
+const RESPAWN_DELAY_MS = 3000;
 const EYE_HEIGHT = 1.6;
 const BODY_CENTER_Y = 0.95;
 const BODY_RADIUS = 0.45;
@@ -65,6 +65,14 @@ const MAP = {
     { id: "wall-a", position: { x: -14, y: 1.4, z: 10 }, size: { x: 10, y: 2.8, z: 1.5 } },
     { id: "wall-b", position: { x: 12, y: 1.4, z: -12 }, size: { x: 10, y: 2.8, z: 1.5 } },
     { id: "pillar", position: { x: 0, y: 1.8, z: -16 }, size: { x: 2.8, y: 3.6, z: 2.8 } }
+  ],
+  targets: [
+    { id: "target-1", position: { x: -28, y: 1.4, z: -10 }, radius: 0.55 },
+    { id: "target-2", position: { x: 28, y: 1.2, z: 12 }, radius: 0.5 },
+    { id: "target-3", position: { x: -18, y: 1.6, z: 26 }, radius: 0.5 },
+    { id: "target-4", position: { x: 18, y: 1.3, z: -26 }, radius: 0.5 },
+    { id: "target-5", position: { x: 0, y: 2.2, z: 30 }, radius: 0.45 },
+    { id: "target-6", position: { x: 0, y: 1.1, z: -32 }, radius: 0.5 }
   ]
 };
 
@@ -122,12 +130,13 @@ function clamp(value, min, max) {
   return Math.max(min, Math.min(max, value));
 }
 
+// Convention alignee avec Three.js: yaw=0 regarde vers -Z.
 function dirFromYawPitch(yaw, pitch) {
   const cp = Math.cos(pitch);
   return {
-    x: Math.sin(yaw) * cp,
+    x: -Math.sin(yaw) * cp,
     y: Math.sin(pitch),
-    z: Math.cos(yaw) * cp
+    z: -Math.cos(yaw) * cp
   };
 }
 
@@ -135,7 +144,7 @@ function applySpread(dir, spread) {
   if (!spread) {
     return { ...dir };
   }
-  const yaw = Math.atan2(dir.x, dir.z) + (Math.random() - 0.5) * spread;
+  const yaw = Math.atan2(-dir.x, -dir.z) + (Math.random() - 0.5) * spread;
   const pitch = Math.asin(dir.y) + (Math.random() - 0.5) * spread;
   return dirFromYawPitch(yaw, pitch);
 }
@@ -274,6 +283,59 @@ function findHit(origin, dir, range, shooterId, obstacleHit) {
   return best;
 }
 
+function findTargetHit(origin, dir, range, obstacleHit) {
+  let best = null;
+  if (!Array.isArray(MAP.targets)) {
+    return null;
+  }
+
+  for (const target of MAP.targets) {
+    const t = raySphere(origin, dir, target.position, target.radius);
+    if (t === null || t > range) {
+      continue;
+    }
+    if (obstacleHit !== null && t >= obstacleHit) {
+      continue;
+    }
+    if (!best || t < best.distance) {
+      best = { target, distance: t };
+    }
+  }
+
+  return best;
+}
+
+function resolveImpact(origin, dir, weapon, shooterId) {
+  const obstacleHit = obstacleDistance(origin, dir, weapon.range);
+  const playerHit = findHit(origin, dir, weapon.range, shooterId, obstacleHit);
+  const targetHit = findTargetHit(origin, dir, weapon.range, obstacleHit);
+
+  if (playerHit && (!targetHit || playerHit.distance <= targetHit.distance)) {
+    return {
+      distance: playerHit.distance,
+      impact: { type: "player", targetId: playerHit.target.id, part: playerHit.part },
+      playerHit
+    };
+  }
+
+  if (targetHit) {
+    return {
+      distance: targetHit.distance,
+      impact: { type: "target", targetId: targetHit.target.id },
+      targetHit
+    };
+  }
+
+  if (obstacleHit !== null) {
+    return {
+      distance: obstacleHit,
+      impact: { type: "obstacle" }
+    };
+  }
+
+  return { distance: weapon.range, impact: null };
+}
+
 function handleShoot(player) {
   if (player.dead) {
     return;
@@ -301,22 +363,11 @@ function handleShoot(player) {
 
   for (let i = 0; i < weapon.pellets; i++) {
     const dir = applySpread(baseDir, weapon.spread);
-    const obstacleHit = obstacleDistance(origin, dir, weapon.range);
-    const hit = findHit(origin, dir, weapon.range, player.id, obstacleHit);
-    let distance = weapon.range;
-    let impact = null;
+    const result = resolveImpact(origin, dir, weapon, player.id);
+    traces.push({ dir, distance: result.distance, impact: result.impact });
 
-    if (hit) {
-      distance = hit.distance;
-      impact = { type: "player", targetId: hit.target.id, part: hit.part };
-    } else if (obstacleHit !== null) {
-      distance = obstacleHit;
-      impact = { type: "obstacle" };
-    }
-
-    traces.push({ dir, distance, impact });
-
-    if (hit) {
+    if (result.playerHit) {
+      const hit = result.playerHit;
       const damage = Math.round(
         weapon.damage * (hit.part === "head" ? weapon.headshot : 1)
       );
@@ -327,7 +378,7 @@ function handleShoot(player) {
         part: hit.part,
         damage,
         remaining: hit.target.health,
-        distance
+        distance: result.distance
       });
 
       if (hit.target.health <= 0 && !hit.target.dead) {
@@ -350,6 +401,14 @@ function handleShoot(player) {
           hit.target.position = randomSpawn();
         }, RESPAWN_DELAY_MS);
       }
+    }
+
+    if (result.targetHit) {
+      hits.push({
+        targetId: result.targetHit.target.id,
+        type: "target",
+        distance: result.distance
+      });
     }
   }
 
