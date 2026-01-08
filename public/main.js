@@ -565,10 +565,8 @@ function ensureRemotePlayer(data) {
     health: data.health || 100,
     dead: false,
     name: data.name || `Joueur ${data.id}`,
-    skinKey,
-    stance: normalizeStance(data.stance)
+    skinKey
   };
-  mesh.scale.set(1, getStanceScaleY(entry.stance), 1);
   scene.add(mesh);
   remotePlayers.set(data.id, entry);
   return entry;
@@ -602,7 +600,6 @@ function updatePlayers(players) {
     entry.health = p.health;
     entry.name = p.name || entry.name;
     entry.dead = p.dead;
-    entry.stance = normalizeStance(p.stance);
     entry.mesh.visible = !p.dead;
   }
 
@@ -618,9 +615,6 @@ function updatePlayers(players) {
 function updateLocalState(state) {
   if (typeof state.health === "number") {
     healthEl.textContent = `${Math.max(0, Math.round(state.health))} PV`;
-  }
-  if (state.stance) {
-    player.stance = normalizeStance(state.stance);
   }
   if (typeof state.dead === "boolean") {
     if (state.dead && !localDead) {
@@ -1133,6 +1127,7 @@ function updateGrenades(dt) {
     }
   }
 }
+
 function normalizeStance(stance) {
   return PLAYER_STANCES[stance] ? stance : DEFAULT_STANCE;
 }
@@ -1371,11 +1366,6 @@ function updateRemotePlayers(dt) {
   for (const entry of remotePlayers.values()) {
     entry.mesh.position.lerp(entry.targetPosition, 0.2);
     entry.mesh.rotation.y = entry.targetYaw;
-    const targetScaleY = getStanceScaleY(entry.stance);
-    const lerpFactor = 0.25;
-    entry.mesh.scale.y = THREE.MathUtils.lerp(entry.mesh.scale.y, targetScaleY, lerpFactor);
-    entry.mesh.scale.x = THREE.MathUtils.lerp(entry.mesh.scale.x, 1, lerpFactor);
-    entry.mesh.scale.z = THREE.MathUtils.lerp(entry.mesh.scale.z, 1, lerpFactor);
   }
 }
 
@@ -1485,8 +1475,7 @@ function sendState(now) {
       position: { x: player.position.x, y: player.position.y, z: player.position.z },
       yaw: player.yaw,
       pitch: player.pitch,
-      weapon: currentWeapon,
-      stance: player.stance
+      weapon: currentWeapon
     })
   );
 }
@@ -1622,17 +1611,6 @@ function connectControls() {
       case "ShiftRight":
         input.sprint = true;
         break;
-      case "ControlLeft":
-      case "ControlRight":
-      case "KeyC":
-        input.crouch = true;
-        input.prone = false;
-        break;
-      case "KeyX":
-        input.prone = true;
-        input.crouch = false;
-        input.sprint = false;
-        break;
       case "Space":
         input.jump = true;
         break;
@@ -1689,14 +1667,6 @@ function connectControls() {
       case "ShiftLeft":
       case "ShiftRight":
         input.sprint = false;
-        break;
-      case "ControlLeft":
-      case "ControlRight":
-      case "KeyC":
-        input.crouch = false;
-        break;
-      case "KeyX":
-        input.prone = false;
         break;
       case "Space":
         input.jump = false;
