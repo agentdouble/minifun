@@ -101,16 +101,40 @@ const grid = new THREE.GridHelper(120, 60, 0x3b4355, 0x222735);
 scene.add(grid);
 
 const PLAYER_RADIUS = 0.45;
-const EYE_HEIGHT = 1.6;
-const PLAYER_HEIGHT = 1.8;
 const STEP_HEIGHT = 0.55;
+const PLAYER_STANCES = {
+  stand: {
+    height: 1.8,
+    eyeHeight: 1.6,
+    speedMultiplier: 1,
+    bodyCenter: 0.95,
+    headCenter: 1.65
+  },
+  crouch: {
+    height: 1.2,
+    eyeHeight: 1.05,
+    speedMultiplier: 0.65,
+    bodyCenter: 0.8,
+    headCenter: 1.25
+  },
+  prone: {
+    height: 0.6,
+    eyeHeight: 0.55,
+    speedMultiplier: 0.4,
+    bodyCenter: 0.45,
+    headCenter: 0.65
+  }
+};
+const DEFAULT_STANCE = "stand";
+const BASE_PLAYER_HEIGHT = PLAYER_STANCES.stand.height;
 
 const player = {
   position: new THREE.Vector3(0, 0, 0),
   velocity: new THREE.Vector3(0, 0, 0),
   yaw: 0,
   pitch: 0,
-  onGround: false
+  onGround: false,
+  stance: DEFAULT_STANCE
 };
 
 const input = {
@@ -120,7 +144,9 @@ const input = {
   right: false,
   jump: false,
   sprint: false,
-  firing: false
+  firing: false,
+  crouch: false,
+  prone: false
 };
 
 function resetInput() {
@@ -131,6 +157,8 @@ function resetInput() {
   input.jump = false;
   input.sprint = false;
   input.firing = false;
+  input.crouch = false;
+  input.prone = false;
 }
 
 const MOVEMENT = {
@@ -496,21 +524,49 @@ function createTargetMesh(target) {
   };
 }
 
-function ensureRemotePlayer(data) {
-  if (remotePlayers.has(data.id)) {
-    return;
+function getSkinKey(playerData) {
+  if (!playerData || typeof playerData.name !== "string") {
+    return "default";
   }
+  return playerData.name.trim().toLowerCase() === "trebla" ? "diamond" : "default";
+}
+
+function ensureRemotePlayer(data) {
+  const skinKey = getSkinKey(data);
   const color = new THREE.Color().setHSL((Number(data.id) * 0.17) % 1, 0.6, 0.5);
-  const mesh = createPlayerMesh(color);
-  scene.add(mesh);
-  remotePlayers.set(data.id, {
+  let entry = remotePlayers.get(data.id);
+
+  if (entry) {
+    if (entry.skinKey !== skinKey) {
+      const replacement = createPlayerMesh(color, { diamond: skinKey === "diamond" });
+      replacement.position.copy(entry.mesh.position);
+      replacement.rotation.copy(entry.mesh.rotation);
+      scene.remove(entry.mesh);
+      scene.add(replacement);
+      entry.mesh = replacement;
+      entry.skinKey = skinKey;
+    }
+    return entry;
+  }
+
+  const mesh = createPlayerMesh(color, { diamond: skinKey === "diamond" });
+  const targetPosition = new THREE.Vector3();
+  if (data.position) {
+    targetPosition.set(data.position.x, data.position.y, data.position.z);
+    mesh.position.copy(targetPosition);
+  }
+  entry = {
     mesh,
-    targetPosition: new THREE.Vector3(),
+    targetPosition,
     targetYaw: 0,
     health: data.health || 100,
     dead: false,
-    name: data.name || `Joueur ${data.id}`
-  });
+    name: data.name || `Joueur ${data.id}`,
+    skinKey
+  };
+  scene.add(mesh);
+  remotePlayers.set(data.id, entry);
+  return entry;
 }
 
 function removeRemotePlayer(id) {
@@ -530,8 +586,10 @@ function updatePlayers(players) {
       updateLocalState(p);
       continue;
     }
-    ensureRemotePlayer(p);
-    const entry = remotePlayers.get(p.id);
+    const entry = ensureRemotePlayer(p);
+    if (!entry) {
+      continue;
+    }
     entry.targetPosition.set(p.position.x, p.position.y, p.position.z);
     entry.targetYaw = p.yaw || 0;
     entry.health = p.health;
@@ -654,16 +712,44 @@ function updateViewModelForWeapon(weaponKey) {
   applyViewModelTransform();
 }
 
-function createPlayerMesh(color) {
+function createPlayerMesh(color, options = {}) {
   const group = new THREE.Group();
+  const diamond = options.diamond;
 
   const bodyGeometry = new THREE.CylinderGeometry(0.45, 0.45, 1.3, 12);
   const headGeometry = new THREE.SphereGeometry(0.25, 14, 14);
   const accentGeometry = new THREE.BoxGeometry(0.18, 0.18, 0.4);
 
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color });
-  const headMaterial = new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.1, 0.2) });
-  const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x131722 });
+  const bodyMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xcff5ff,
+        emissive: new THREE.Color(0x6edbff),
+        emissiveIntensity: 0.55,
+        metalness: 1,
+        roughness: 0.04,
+        envMapIntensity: 1.3
+      })
+    : new THREE.MeshStandardMaterial({ color });
+  const headMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xe1fbff,
+        emissive: new THREE.Color(0x8be9ff),
+        emissiveIntensity: 0.5,
+        metalness: 0.96,
+        roughness: 0.05,
+        envMapIntensity: 1.2
+      })
+    : new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.1, 0.2) });
+  const accentMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: new THREE.Color(0x9bf0ff),
+        emissiveIntensity: 0.45,
+        metalness: 0.9,
+        roughness: 0.02,
+        envMapIntensity: 1.2
+      })
+    : new THREE.MeshStandardMaterial({ color: 0x131722 });
 
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
   body.position.y = 0.65;
@@ -671,6 +757,13 @@ function createPlayerMesh(color) {
   head.position.y = 1.55;
   const accent = new THREE.Mesh(accentGeometry, accentMaterial);
   accent.position.set(0, 1.4, 0.45);
+
+  if (diamond) {
+    const sparkle = new THREE.PointLight(0x9bf0ff, 1.2, 7);
+    sparkle.position.set(0, 1.2, 0);
+    group.add(sparkle);
+  }
+  group.userData.diamond = Boolean(diamond);
 
   group.add(body, head, accent);
   return group;
@@ -1030,6 +1123,59 @@ function updateGrenades(dt) {
   }
 }
 
+function normalizeStance(stance) {
+  return PLAYER_STANCES[stance] ? stance : DEFAULT_STANCE;
+}
+
+function getStanceProfile(stance = player.stance) {
+  return PLAYER_STANCES[normalizeStance(stance)];
+}
+
+function getStanceScaleY(stance) {
+  const profile = getStanceProfile(stance);
+  return profile.height / BASE_PLAYER_HEIGHT;
+}
+
+function hasClearanceForHeight(desiredHeight) {
+  const radiusSq = PLAYER_RADIUS * PLAYER_RADIUS;
+  const playerTop = player.position.y + desiredHeight;
+
+  for (const obstacle of obstacles) {
+    if (player.position.y >= obstacle.max.y || playerTop <= obstacle.min.y) {
+      continue;
+    }
+    const nearestX = Math.max(obstacle.min.x, Math.min(player.position.x, obstacle.max.x));
+    const nearestZ = Math.max(obstacle.min.z, Math.min(player.position.z, obstacle.max.z));
+    const dx = player.position.x - nearestX;
+    const dz = player.position.z - nearestZ;
+    if (dx * dx + dz * dz < radiusSq) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+function updatePlayerStanceFromInput() {
+  const desired = input.prone ? "prone" : input.crouch ? "crouch" : DEFAULT_STANCE;
+  const normalized = normalizeStance(desired);
+  if (normalized === player.stance) {
+    return;
+  }
+  const targetProfile = getStanceProfile(normalized);
+  if (hasClearanceForHeight(targetProfile.height)) {
+    player.stance = normalized;
+    return;
+  }
+  if (
+    normalized === DEFAULT_STANCE &&
+    PLAYER_STANCES.crouch &&
+    hasClearanceForHeight(PLAYER_STANCES.crouch.height)
+  ) {
+    player.stance = "crouch";
+  }
+}
+
 function applyFriction(dt) {
   const speed = Math.hypot(player.velocity.x, player.velocity.z);
   if (speed < 0.001) {
@@ -1052,12 +1198,12 @@ function accelerate(wishDir, wishSpeed, accel, dt) {
   player.velocity.addScaledVector(wishDir, accelSpeed);
 }
 
-function resolveCollisions(previousBottomY, wasOnGround) {
+function resolveCollisions(previousBottomY, wasOnGround, playerHeight) {
   let onPlatform = false;
   const radiusSq = PLAYER_RADIUS * PLAYER_RADIUS;
 
   for (const obstacle of obstacles) {
-    const playerTopY = player.position.y + PLAYER_HEIGHT;
+    const playerTopY = player.position.y + playerHeight;
     if (player.position.y >= obstacle.max.y && player.velocity.y <= 0) {
       // Pas de collision latérale quand on est au-dessus.
     } else if (playerTopY <= obstacle.min.y) {
@@ -1133,9 +1279,10 @@ function updateMovement(dt) {
 
   if (localDead) {
     player.velocity.set(0, 0, 0);
+    const stance = getStanceProfile();
     camera.position.set(
       player.position.x,
-      player.position.y + EYE_HEIGHT,
+      player.position.y + stance.eyeHeight,
       player.position.z
     );
     camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
@@ -1143,14 +1290,17 @@ function updateMovement(dt) {
   }
   if (document.pointerLockElement !== canvas) {
     player.velocity.set(0, 0, 0);
+    const stance = getStanceProfile();
     camera.position.set(
       player.position.x,
-      player.position.y + EYE_HEIGHT,
+      player.position.y + stance.eyeHeight,
       player.position.z
     );
     camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
     return;
   }
+  updatePlayerStanceFromInput();
+  let stance = getStanceProfile();
   const forward = new THREE.Vector3(-Math.sin(player.yaw), 0, -Math.cos(player.yaw));
   const right = new THREE.Vector3(-forward.z, 0, forward.x);
   const wishDir = new THREE.Vector3();
@@ -1164,7 +1314,9 @@ function updateMovement(dt) {
     wishDir.normalize();
   }
 
-  const maxSpeed = input.sprint ? MOVEMENT.sprintSpeed : MOVEMENT.walkSpeed;
+  const sprinting = input.sprint && player.stance === DEFAULT_STANCE;
+  const maxSpeed =
+    (sprinting ? MOVEMENT.sprintSpeed : MOVEMENT.walkSpeed) * stance.speedMultiplier;
 
   if (wasOnGround) {
     applyFriction(dt);
@@ -1175,14 +1327,21 @@ function updateMovement(dt) {
 
   player.velocity.y -= MOVEMENT.gravity * dt;
 
-  if (input.jump && wasOnGround) {
-    player.velocity.y = MOVEMENT.jumpVelocity;
+  if (input.jump && wasOnGround && player.stance !== "prone") {
+    const standProfile = getStanceProfile(DEFAULT_STANCE);
+    if (hasClearanceForHeight(standProfile.height)) {
+      player.velocity.y = MOVEMENT.jumpVelocity;
+      player.stance = DEFAULT_STANCE;
+      input.crouch = false;
+      input.prone = false;
+      stance = standProfile;
+    }
   }
 
   player.position.addScaledVector(player.velocity, dt);
 
   player.onGround = false;
-  resolveCollisions(previousBottomY, wasOnGround);
+  resolveCollisions(previousBottomY, wasOnGround, stance.height);
   if (!player.onGround && player.position.y <= 0) {
     player.position.y = 0;
     player.velocity.y = 0;
@@ -1192,7 +1351,7 @@ function updateMovement(dt) {
 
   camera.position.set(
     player.position.x,
-    player.position.y + EYE_HEIGHT,
+    player.position.y + stance.eyeHeight,
     player.position.z
   );
   camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
