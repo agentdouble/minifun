@@ -988,16 +988,12 @@ function showHitmarker(kind = "player") {
   if (!hitmarkerEl) {
     return;
   }
-  const resolvedKind = kind === "target" ? "target" : "player";
-  hitmarkerEl.classList.remove("player", "target");
-  hitmarkerEl.classList.add("active", resolvedKind);
-  hitmarkerEl.dataset.label = resolvedKind === "target" ? "CIBLE" : "TOUCHE";
+  hitmarkerEl.classList.add("active");
   if (hitmarkerTimer) {
     clearTimeout(hitmarkerTimer);
   }
   hitmarkerTimer = setTimeout(() => {
-    hitmarkerEl.classList.remove("active", "player", "target");
-    hitmarkerEl.dataset.label = "";
+    hitmarkerEl.classList.remove("active");
     hitmarkerTimer = null;
   }, 160);
 }
@@ -1231,11 +1227,6 @@ function renderShot(msg) {
       sideOffset: 0,
       maxLength: isLocal ? 8 : distance
     });
-    spawnProjectile(visualOrigin, dir, distance, {
-      muzzleOffset: muzzleKick * 0.6,
-      sideOffset: 0,
-      maxTravel: isLocal ? 10 : 8
-    });
     if (trace.impact) {
       const end = serverOrigin.clone().add(dir.clone().multiplyScalar(distance));
       spawnImpact(end, trace.impact.type);
@@ -1284,39 +1275,6 @@ function spawnTracer(origin, dir, distance, options = {}) {
   mesh.renderOrder = EFFECT_RENDER_ORDER;
   scene.add(mesh);
   effects.push({ object: mesh, life: 0.2, maxLife: 0.2 });
-}
-
-function spawnProjectile(origin, dir, distance, options = {}) {
-  const normalized = dir.clone();
-  if (normalized.lengthSq() < 1e-6) {
-    return;
-  }
-  normalized.normalize();
-  const right = getRightVector(normalized);
-  const sideOffset = options.sideOffset || 0;
-  const muzzleOffset = options.muzzleOffset || 0.25;
-  const maxTravel = typeof options.maxTravel === "number" ? options.maxTravel : 12;
-  const travelDistance = Math.max(0.6, Math.min(distance, maxTravel));
-  const speed = typeof options.speed === "number" ? options.speed : 80;
-  const life = Math.max(0.08, travelDistance / speed);
-  const position = origin
-    .clone()
-    .add(right.multiplyScalar(sideOffset))
-    .add(normalized.clone().multiplyScalar(muzzleOffset));
-
-  const material = new THREE.MeshBasicMaterial({
-    color: options.color || 0xfff1b2,
-    transparent: true,
-    opacity: 0.95,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false
-  });
-  const mesh = new THREE.Mesh(projectileGeometry, material);
-  mesh.position.copy(position);
-  mesh.renderOrder = EFFECT_RENDER_ORDER;
-  scene.add(mesh);
-  const velocity = normalized.multiplyScalar(travelDistance / life);
-  effects.push({ object: mesh, life, maxLife: life, velocity, shrink: true });
 }
 
 function spawnImpact(position, type) {

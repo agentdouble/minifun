@@ -402,42 +402,41 @@ button#play:hover {
   position: absolute;
   left: 50%;
   top: 50%;
+  width: 12px;
+  height: 12px;
   transform: translate(-50%, -50%) scale(0.6);
-  font-size: 28px;
-  color: var(--accent-2);
   opacity: 0;
   transition: opacity 0.2s ease, transform 0.2s ease;
+  pointer-events: none;
+  z-index: 4;
 }
 
-.hitmarker.target {
-  color: var(--accent);
+.hitmarker::before,
+.hitmarker::after {
+  content: "";
+  position: absolute;
+  background: rgba(255, 255, 255, 0.95);
+}
+
+.hitmarker::before {
+  width: 2px;
+  height: 10px;
+  left: 50%;
+  top: 1px;
+  transform: translateX(-50%);
 }
 
 .hitmarker::after {
-  content: attr(data-label);
-  position: absolute;
-  left: 50%;
-  top: 32px;
-  transform: translate(-50%, 6px) scale(0.96);
-  font-family: "Space Mono", monospace;
-  font-size: 0.6rem;
-  letter-spacing: 0.28em;
-  text-transform: uppercase;
-  color: currentColor;
-  opacity: 0;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-  white-space: nowrap;
-  pointer-events: none;
+  width: 10px;
+  height: 2px;
+  top: 50%;
+  left: 1px;
+  transform: translateY(-50%);
 }
 
 .hitmarker.active {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
-}
-
-.hitmarker.active::after {
-  opacity: 0.9;
-  transform: translate(-50%, 0) scale(1);
 }
 
 @media (max-width: 700px) {
