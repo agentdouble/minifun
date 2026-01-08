@@ -453,21 +453,49 @@ function createTargetMesh(target) {
   };
 }
 
-function ensureRemotePlayer(data) {
-  if (remotePlayers.has(data.id)) {
-    return;
+function getSkinKey(playerData) {
+  if (!playerData || typeof playerData.name !== "string") {
+    return "default";
   }
+  return playerData.name.trim().toLowerCase() === "trebla" ? "diamond" : "default";
+}
+
+function ensureRemotePlayer(data) {
+  const skinKey = getSkinKey(data);
   const color = new THREE.Color().setHSL((Number(data.id) * 0.17) % 1, 0.6, 0.5);
-  const mesh = createPlayerMesh(color);
-  scene.add(mesh);
-  remotePlayers.set(data.id, {
+  let entry = remotePlayers.get(data.id);
+
+  if (entry) {
+    if (entry.skinKey !== skinKey) {
+      const replacement = createPlayerMesh(color, { diamond: skinKey === "diamond" });
+      replacement.position.copy(entry.mesh.position);
+      replacement.rotation.copy(entry.mesh.rotation);
+      scene.remove(entry.mesh);
+      scene.add(replacement);
+      entry.mesh = replacement;
+      entry.skinKey = skinKey;
+    }
+    return entry;
+  }
+
+  const mesh = createPlayerMesh(color, { diamond: skinKey === "diamond" });
+  const targetPosition = new THREE.Vector3();
+  if (data.position) {
+    targetPosition.set(data.position.x, data.position.y, data.position.z);
+    mesh.position.copy(targetPosition);
+  }
+  entry = {
     mesh,
-    targetPosition: new THREE.Vector3(),
+    targetPosition,
     targetYaw: 0,
     health: data.health || 100,
     dead: false,
-    name: data.name || `Joueur ${data.id}`
-  });
+    name: data.name || `Joueur ${data.id}`,
+    skinKey
+  };
+  scene.add(mesh);
+  remotePlayers.set(data.id, entry);
+  return entry;
 }
 
 function removeRemotePlayer(id) {
@@ -487,8 +515,10 @@ function updatePlayers(players) {
       updateLocalState(p);
       continue;
     }
-    ensureRemotePlayer(p);
-    const entry = remotePlayers.get(p.id);
+    const entry = ensureRemotePlayer(p);
+    if (!entry) {
+      continue;
+    }
     entry.targetPosition.set(p.position.x, p.position.y, p.position.z);
     entry.targetYaw = p.yaw || 0;
     entry.health = p.health;
@@ -611,16 +641,44 @@ function updateViewModelForWeapon(weaponKey) {
   applyViewModelTransform();
 }
 
-function createPlayerMesh(color) {
+function createPlayerMesh(color, options = {}) {
   const group = new THREE.Group();
+  const diamond = options.diamond;
 
   const bodyGeometry = new THREE.CylinderGeometry(0.45, 0.45, 1.3, 12);
   const headGeometry = new THREE.SphereGeometry(0.25, 14, 14);
   const accentGeometry = new THREE.BoxGeometry(0.18, 0.18, 0.4);
 
-  const bodyMaterial = new THREE.MeshStandardMaterial({ color });
-  const headMaterial = new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.1, 0.2) });
-  const accentMaterial = new THREE.MeshStandardMaterial({ color: 0x131722 });
+  const bodyMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xcff5ff,
+        emissive: new THREE.Color(0x6edbff),
+        emissiveIntensity: 0.55,
+        metalness: 1,
+        roughness: 0.04,
+        envMapIntensity: 1.3
+      })
+    : new THREE.MeshStandardMaterial({ color });
+  const headMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xe1fbff,
+        emissive: new THREE.Color(0x8be9ff),
+        emissiveIntensity: 0.5,
+        metalness: 0.96,
+        roughness: 0.05,
+        envMapIntensity: 1.2
+      })
+    : new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.1, 0.2) });
+  const accentMaterial = diamond
+    ? new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        emissive: new THREE.Color(0x9bf0ff),
+        emissiveIntensity: 0.45,
+        metalness: 0.9,
+        roughness: 0.02,
+        envMapIntensity: 1.2
+      })
+    : new THREE.MeshStandardMaterial({ color: 0x131722 });
 
   const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
   body.position.y = 0.65;
