@@ -481,15 +481,18 @@ function createTargetMesh(target) {
   };
 }
 
-function getSkinKey(playerData) {
-  if (!playerData || typeof playerData.name !== "string") {
+function getSkinKeyFromName(name) {
+  if (typeof name !== "string") {
     return "default";
   }
-  return playerData.name.trim().toLowerCase() === "trebla" ? "diamond" : "default";
+  return name.trim().toLowerCase() === "trebla" ? "diamond" : "default";
 }
 
 function ensureRemotePlayer(data) {
-  const skinKey = getSkinKey(data);
+  if (!data || typeof data.id !== "string") {
+    return null;
+  }
+  const skinKey = getSkinKeyFromName(data.name);
   const color = new THREE.Color().setHSL((Number(data.id) * 0.17) % 1, 0.6, 0.5);
   let entry = remotePlayers.get(data.id);
 
@@ -547,7 +550,9 @@ function updatePlayers(players) {
     if (!entry) {
       continue;
     }
-    entry.targetPosition.set(p.position.x, p.position.y, p.position.z);
+    if (p.position) {
+      entry.targetPosition.set(p.position.x, p.position.y, p.position.z);
+    }
     entry.targetYaw = p.yaw || 0;
     entry.health = p.health;
     entry.name = p.name || entry.name;
@@ -671,7 +676,7 @@ function updateViewModelForWeapon(weaponKey) {
 
 function createPlayerMesh(color, options = {}) {
   const group = new THREE.Group();
-  const diamond = options.diamond;
+  const diamond = Boolean(options.diamond);
 
   const bodyGeometry = new THREE.CylinderGeometry(0.45, 0.45, 1.3, 12);
   const headGeometry = new THREE.SphereGeometry(0.25, 14, 14);
