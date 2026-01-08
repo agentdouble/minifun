@@ -19,6 +19,8 @@ Ouvre ensuite `http://<ip-de-la-machine>:3000` sur chaque ordinateur du reseau l
 - Clic droit (sniper) : viser au scope
 - Tab : afficher le leaderboard
 - Shift : sprint
+- Ctrl / C : s'accroupir
+- X : s'allonger
 - Espace : sauter
 - 1 / 2 / 3 / 4 / 5 : changer d'arme
 - R : recharger
