@@ -409,9 +409,35 @@ button#play:hover {
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
+.hitmarker.target {
+  color: var(--accent);
+}
+
+.hitmarker::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 50%;
+  top: 32px;
+  transform: translate(-50%, 6px) scale(0.96);
+  font-family: "Space Mono", monospace;
+  font-size: 0.6rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: currentColor;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 .hitmarker.active {
   opacity: 1;
   transform: translate(-50%, -50%) scale(1);
+}
+
+.hitmarker.active::after {
+  opacity: 0.9;
+  transform: translate(-50%, 0) scale(1);
 }
 
 @media (max-width: 700px) {
