@@ -246,6 +246,10 @@ button#play:hover {
   letter-spacing: 0.08em;
 }
 
+.flash-status {
+  color: var(--accent);
+}
+
 .feed {
   position: absolute;
   top: 16px;
@@ -362,6 +366,16 @@ button#play:hover {
 
 .scope.active {
   opacity: 1;
+}
+
+.flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+  z-index: 6;
+  transition: opacity 0.05s linear;
 }
 
 .scope::before,
