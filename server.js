@@ -6,10 +6,7 @@ const { WebSocketServer } = require("ws");
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 20;
 const RESPAWN_DELAY_MS = 3000;
-const EYE_HEIGHT = 1.6;
-const BODY_CENTER_Y = 0.95;
 const BODY_RADIUS = 0.45;
-const HEAD_CENTER_Y = 1.65;
 const HEAD_RADIUS = 0.25;
 const FLASH = {
   fuseMs: 1200,
@@ -22,6 +19,24 @@ const FLASH = {
   upBoost: 3.2,
   gravity: 26
 };
+const PLAYER_STANCES = {
+  stand: {
+    eyeHeight: 1.6,
+    bodyCenter: 0.95,
+    headCenter: 1.65
+  },
+  crouch: {
+    eyeHeight: 1.05,
+    bodyCenter: 0.8,
+    headCenter: 1.25
+  },
+  prone: {
+    eyeHeight: 0.55,
+    bodyCenter: 0.45,
+    headCenter: 0.65
+  }
+};
+const DEFAULT_STANCE = "stand";
 
 const WEAPONS = {
   pistol: {
@@ -192,6 +207,7 @@ function createPlayer() {
     position: { ...spawn },
     yaw: 0,
     pitch: 0,
+    stance: DEFAULT_STANCE,
     health: 100,
     weapon: "rifle",
     lastShotAt: 0,
@@ -236,6 +252,14 @@ function sanitizePlayerName(name, fallbackId) {
     return `Joueur ${fallbackId}`;
   }
   return cleaned.slice(0, 16);
+}
+
+function normalizeStance(stance) {
+  return PLAYER_STANCES[stance] ? stance : DEFAULT_STANCE;
+}
+
+function getStanceProfile(stance) {
+  return PLAYER_STANCES[normalizeStance(stance)];
 }
 
 // Convention alignee avec Three.js: yaw=0 regarde vers -Z.
@@ -407,14 +431,15 @@ function findHit(origin, dir, range, shooterId, obstacleHit) {
       continue;
     }
 
+    const stance = getStanceProfile(player.stance);
     const bodyCenter = {
       x: player.position.x,
-      y: player.position.y + BODY_CENTER_Y,
+      y: player.position.y + stance.bodyCenter,
       z: player.position.z
     };
     const headCenter = {
       x: player.position.x,
-      y: player.position.y + HEAD_CENTER_Y,
+      y: player.position.y + stance.headCenter,
       z: player.position.z
     };
 
@@ -516,9 +541,10 @@ function handleShoot(player) {
   }
   player.lastShotAt = now;
 
+  const stance = getStanceProfile(player.stance);
   const origin = {
     x: player.position.x,
-    y: player.position.y + EYE_HEIGHT,
+    y: player.position.y + stance.eyeHeight,
     z: player.position.z
   };
   const baseDir = dirFromYawPitch(player.yaw, player.pitch);
@@ -562,6 +588,7 @@ function handleShoot(player) {
           }
           hit.target.dead = false;
           hit.target.health = 100;
+          hit.target.stance = DEFAULT_STANCE;
           hit.target.position = randomSpawn();
         }, RESPAWN_DELAY_MS);
       }
@@ -637,6 +664,9 @@ wss.on("connection", (ws) => {
       if (typeof msg.pitch === "number") {
         current.pitch = clamp(msg.pitch, -1.3, 1.3);
       }
+      if (typeof msg.stance === "string") {
+        current.stance = normalizeStance(msg.stance);
+      }
       if (typeof msg.weapon === "string" && WEAPONS[msg.weapon]) {
         current.weapon = msg.weapon;
       }
@@ -679,6 +709,7 @@ setInterval(() => {
     position: player.position,
     yaw: player.yaw,
     pitch: player.pitch,
+    stance: player.stance,
     health: player.health,
     weapon: player.weapon,
     dead: player.dead,
