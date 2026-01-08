@@ -13,6 +13,9 @@ const scopeEl = document.getElementById("scope");
 const flashEl = document.getElementById("flash");
 const flashStatusEl = document.getElementById("flash-status");
 const nameInput = document.getElementById("player-name");
+const sensitivityInput = document.getElementById("sensitivity");
+const sensitivityValueEl = document.getElementById("sensitivity-value");
+const resetSettingsButton = document.getElementById("reset-settings");
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0b0d12);
@@ -21,6 +24,7 @@ const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerH
 const DEFAULT_FOV = camera.fov;
 const SCOPE_FOV = 28;
 const NAME_STORAGE_KEY = "vz_player_name";
+const SENSITIVITY_STORAGE_KEY = "vz_sensitivity";
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
@@ -35,21 +39,6 @@ scene.add(ambientLight);
 const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
 dirLight.position.set(10, 15, 6);
 scene.add(dirLight);
-
-const viewModel = createViewModel();
-camera.add(viewModel.group);
-scene.add(camera);
-
-const viewModelBaseOffset = new THREE.Vector3().copy(viewModel.group.position);
-const recoilState = { x: 0, y: 0, z: 0 };
-const RECOIL_PROFILES = {
-  pistol: { back: 0.07, up: 0.025, side: 0.01, maxBack: 0.14 },
-  deagle: { back: 0.11, up: 0.04, side: 0.014, maxBack: 0.18 },
-  rifle: { back: 0.05, up: 0.018, side: 0.008, maxBack: 0.12 },
-  sniper: { back: 0.09, up: 0.03, side: 0.01, maxBack: 0.16 },
-  shotgun: { back: 0.12, up: 0.045, side: 0.016, maxBack: 0.2 }
-};
-const VIEW_MODEL_MUZZLE_LOCAL = new THREE.Vector3(0, 0, -0.3);
 
 function dampValue(value, target, lambda, dt) {
   const t = 1 - Math.exp(-lambda * dt);
@@ -88,7 +77,7 @@ function getViewModelMuzzleWorldPosition(out) {
     out = new THREE.Vector3();
   }
   viewModel.barrel.updateWorldMatrix(true, false);
-  return out.copy(VIEW_MODEL_MUZZLE_LOCAL).applyMatrix4(viewModel.barrel.matrixWorld);
+  return out.copy(viewModelMuzzleLocal).applyMatrix4(viewModel.barrel.matrixWorld);
 }
 
 const groundGeometry = new THREE.PlaneGeometry(120, 120);
@@ -177,6 +166,7 @@ const grenades = [];
 const tracerGeometry = new THREE.CylinderGeometry(0.03, 0.015, 1, 6, 1, true);
 const impactGeometry = new THREE.SphereGeometry(0.12, 8, 8);
 const muzzleGeometry = new THREE.SphereGeometry(0.14, 8, 8);
+const projectileGeometry = new THREE.SphereGeometry(0.055, 10, 10);
 const grenadeGeometry = new THREE.SphereGeometry(0.12, 12, 12);
 const grenadeMaterial = new THREE.MeshStandardMaterial({
   color: 0xf7c944,
@@ -186,6 +176,8 @@ const grenadeMaterial = new THREE.MeshStandardMaterial({
 });
 const upVector = new THREE.Vector3(0, 1, 0);
 const targetNormalAxis = new THREE.Vector3(0, 0, 1);
+const VIEW_MODEL_RENDER_ORDER = 10;
+const EFFECT_RENDER_ORDER = 11;
 const baseTargetFaceMaterial = new THREE.MeshStandardMaterial({
   color: 0xe9eef5,
   roughness: 0.4,
@@ -205,37 +197,104 @@ const baseTargetPoleMaterial = new THREE.MeshStandardMaterial({
   roughness: 0.8,
   metalness: 0.1
 });
+const VIEW_MODEL_DEFAULT_COLORS = {
+  base: 0x2d3446,
+  accent: 0xf7c944,
+  detail: 0xd6dbe6
+};
+
+const VIEW_MODEL_PART_DEFAULTS = {
+  body: { scale: [1, 1, 1], position: [0, 0, -0.12], rotation: [0, 0, 0] },
+  barrel: { scale: [1, 1, 1], position: [0, 0.03, -0.6], rotation: [0, 0, 0] },
+  grip: { scale: [1, 1, 1], position: [0, -0.18, 0.08], rotation: [0, 0, 0] },
+  stock: { scale: [1, 1, 1], position: [0, -0.02, 0.32], rotation: [0, 0, 0] },
+  magazine: { scale: [1, 1, 1], position: [0, -0.26, -0.08], rotation: [0, 0, 0] },
+  scope: { scale: [1, 1, 1], position: [0, 0.14, -0.25], rotation: [Math.PI / 2, 0, 0] },
+  pump: { scale: [1, 1, 1], position: [0, -0.04, -0.5], rotation: [0, 0, 0] }
+};
+
 const VIEW_MODEL_PROFILES = {
   pistol: {
-    bodyScaleZ: 0.75,
-    barrelScaleZ: 0.6,
-    barrelOffsetZ: -0.38,
-    offset: { x: 0.42, y: -0.33, z: -0.68 }
+    offset: { x: 0.42, y: -0.33, z: -0.68 },
+    colors: { base: 0x323a4d, accent: 0xf7c944, detail: 0xe6e9ef },
+    parts: {
+      body: { scale: [0.85, 0.85, 0.65], position: [0, 0, -0.06] },
+      barrel: { scale: [0.6, 0.6, 0.45], position: [0, 0.03, -0.32] },
+      grip: { scale: [0.85, 1.1, 0.9], position: [0, -0.18, 0.1] },
+      stock: { visible: false },
+      magazine: { visible: false },
+      scope: { visible: false },
+      pump: { visible: false }
+    }
   },
   deagle: {
-    bodyScaleZ: 0.82,
-    barrelScaleZ: 0.7,
-    barrelOffsetZ: -0.42,
-    offset: { x: 0.43, y: -0.34, z: -0.72 }
+    offset: { x: 0.43, y: -0.34, z: -0.72 },
+    colors: { base: 0x3a2f2a, accent: 0xffb347, detail: 0xd0b49f },
+    parts: {
+      body: { scale: [1, 0.9, 0.75], position: [0, 0, -0.08] },
+      barrel: { scale: [0.75, 0.75, 0.6], position: [0, 0.04, -0.38] },
+      grip: { scale: [0.9, 1.15, 0.95], position: [0, -0.19, 0.08] },
+      stock: { visible: false },
+      magazine: { scale: [0.7, 0.8, 0.6], position: [0, -0.2, 0.02] },
+      scope: { visible: false },
+      pump: { visible: false }
+    }
   },
   rifle: {
-    bodyScaleZ: 1.15,
-    barrelScaleZ: 1.35,
-    barrelOffsetZ: -0.62,
-    offset: { x: 0.46, y: -0.36, z: -0.95 }
+    offset: { x: 0.46, y: -0.36, z: -0.95 },
+    colors: { base: 0x2d3446, accent: 0x7ce7ff, detail: 0xf7c944 },
+    parts: {
+      body: { scale: [1.05, 0.95, 1.1] },
+      barrel: { scale: [1, 1, 1.35], position: [0, 0.03, -0.7] },
+      grip: { scale: [1, 1, 1] },
+      stock: { scale: [1, 1, 1], position: [0, -0.04, 0.36] },
+      magazine: { scale: [1, 1.2, 1], position: [0, -0.26, -0.08] },
+      scope: { scale: [0.8, 0.8, 0.7], position: [0, 0.14, -0.18] },
+      pump: { visible: false }
+    }
   },
   sniper: {
-    bodyScaleZ: 1.25,
-    barrelScaleZ: 2.1,
-    barrelOffsetZ: -0.85,
-    offset: { x: 0.5, y: -0.37, z: -1.22 }
+    offset: { x: 0.5, y: -0.37, z: -1.22 },
+    colors: { base: 0x1f2a34, accent: 0x7ddc9d, detail: 0xe0f0ff },
+    parts: {
+      body: { scale: [1.1, 0.95, 1.2] },
+      barrel: { scale: [1.1, 1.1, 2], position: [0, 0.03, -1.0] },
+      grip: { scale: [0.95, 1, 1] },
+      stock: { scale: [1.2, 1, 1.3], position: [0, -0.05, 0.45] },
+      magazine: { scale: [0.9, 1.1, 0.8], position: [0, -0.24, -0.16] },
+      scope: { scale: [1.2, 1.2, 1.4], position: [0, 0.16, -0.38] },
+      pump: { visible: false }
+    }
   },
   shotgun: {
-    bodyScaleZ: 1.25,
-    barrelScaleZ: 1.05,
-    barrelOffsetZ: -0.55,
-    offset: { x: 0.45, y: -0.38, z: -0.9 }
+    offset: { x: 0.45, y: -0.38, z: -0.9 },
+    colors: { base: 0x3b2f1f, accent: 0xf26d5b, detail: 0xf7c944 },
+    parts: {
+      body: { scale: [1.05, 1.05, 1] },
+      barrel: { scale: [1.2, 1.2, 1.5], position: [0, 0.03, -0.82] },
+      grip: { scale: [0.95, 1.1, 0.9] },
+      stock: { scale: [1.05, 1.05, 1.1], position: [0, -0.06, 0.36] },
+      magazine: { visible: false },
+      scope: { visible: false },
+      pump: { scale: [1.3, 1, 1.2], position: [0, -0.06, -0.58] }
+    }
   }
+};
+const VIEW_MODEL_BARREL_LENGTH = 0.6;
+const viewModelMuzzleLocal = new THREE.Vector3(0, 0, -VIEW_MODEL_BARREL_LENGTH * 0.5);
+
+const viewModel = createViewModel();
+camera.add(viewModel.group);
+scene.add(camera);
+
+const viewModelBaseOffset = new THREE.Vector3().copy(viewModel.group.position);
+const recoilState = { x: 0, y: 0, z: 0 };
+const RECOIL_PROFILES = {
+  pistol: { back: 0.07, up: 0.025, side: 0.01, maxBack: 0.14 },
+  deagle: { back: 0.11, up: 0.04, side: 0.014, maxBack: 0.18 },
+  rifle: { back: 0.05, up: 0.018, side: 0.008, maxBack: 0.12 },
+  sniper: { back: 0.09, up: 0.03, side: 0.01, maxBack: 0.16 },
+  shotgun: { back: 0.12, up: 0.045, side: 0.016, maxBack: 0.2 }
 };
 let obstacles = [];
 let targets = new Map();
@@ -260,6 +319,68 @@ const LOOK_SENSITIVITY = {
   normal: 0.002,
   scoped: 0.0007
 };
+const DEFAULT_SENSITIVITY_MULTIPLIER = 1;
+let sensitivityMultiplier = 1;
+
+function getDefaultSensitivity() {
+  if (!sensitivityInput) {
+    return DEFAULT_SENSITIVITY_MULTIPLIER;
+  }
+  const parsed = parseFloat(sensitivityInput.defaultValue);
+  return Number.isFinite(parsed) ? parsed : DEFAULT_SENSITIVITY_MULTIPLIER;
+}
+
+function clampSensitivity(value) {
+  if (!Number.isFinite(value)) {
+    return getDefaultSensitivity();
+  }
+  const min = sensitivityInput ? parseFloat(sensitivityInput.min) : 0.4;
+  const max = sensitivityInput ? parseFloat(sensitivityInput.max) : 3;
+  const resolvedMin = Number.isFinite(min) ? min : 0.4;
+  const resolvedMax = Number.isFinite(max) ? max : 3;
+  return Math.min(resolvedMax, Math.max(resolvedMin, value));
+}
+
+function updateSensitivityUI(value) {
+  if (sensitivityInput) {
+    sensitivityInput.value = value.toFixed(2);
+  }
+  if (sensitivityValueEl) {
+    sensitivityValueEl.textContent = `${value.toFixed(2)}x`;
+  }
+}
+
+function setSensitivityMultiplier(value, persist = true) {
+  const clamped = clampSensitivity(value);
+  sensitivityMultiplier = clamped;
+  updateSensitivityUI(clamped);
+  if (persist) {
+    localStorage.setItem(SENSITIVITY_STORAGE_KEY, clamped.toFixed(2));
+  }
+}
+
+function initSensitivityControls() {
+  const stored = parseFloat(localStorage.getItem(SENSITIVITY_STORAGE_KEY));
+  if (Number.isFinite(stored)) {
+    setSensitivityMultiplier(stored, false);
+  } else {
+    setSensitivityMultiplier(getDefaultSensitivity(), false);
+  }
+
+  if (!sensitivityInput) {
+    return;
+  }
+
+  sensitivityInput.addEventListener("input", () => {
+    setSensitivityMultiplier(parseFloat(sensitivityInput.value));
+  });
+
+  if (resetSettingsButton) {
+    resetSettingsButton.addEventListener("click", () => {
+      setSensitivityMultiplier(getDefaultSensitivity());
+    });
+  }
+}
 const FLASH_SETTINGS = {
   maxRadius: 150,
   minHold: 0.15,
@@ -565,7 +686,9 @@ function ensureRemotePlayer(data) {
     health: data.health || 100,
     dead: false,
     name: data.name || `Joueur ${data.id}`,
-    skinKey
+    skinKey,
+    stance: DEFAULT_STANCE,
+    stanceScale: 1
   };
   scene.add(mesh);
   remotePlayers.set(data.id, entry);
@@ -600,6 +723,9 @@ function updatePlayers(players) {
     entry.health = p.health;
     entry.name = p.name || entry.name;
     entry.dead = p.dead;
+    if (typeof p.stance === "string") {
+      entry.stance = normalizeStance(p.stance);
+    }
     entry.mesh.visible = !p.dead;
   }
 
@@ -683,37 +809,110 @@ function createViewModel() {
     metalness: 0.7,
     emissive: new THREE.Color(0x1e1606)
   });
+  const detailMaterial = new THREE.MeshStandardMaterial({
+    color: 0xd6dbe6,
+    roughness: 0.25,
+    metalness: 0.5,
+    emissive: new THREE.Color(0x0f131c)
+  });
   baseMaterial.depthTest = false;
   baseMaterial.depthWrite = false;
   accentMaterial.depthTest = false;
   accentMaterial.depthWrite = false;
+  detailMaterial.depthTest = false;
+  detailMaterial.depthWrite = false;
 
-  const body = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.18, 0.5), baseMaterial);
-  body.position.set(0, 0, -0.1);
-  const barrel = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.08, 0.6), accentMaterial);
-  barrel.position.set(0, 0.02, -0.45);
-  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.16), baseMaterial);
-  grip.position.set(0, -0.15, 0.06);
+  const body = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.2, 0.6), baseMaterial);
+  const barrel = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.08, VIEW_MODEL_BARREL_LENGTH),
+    accentMaterial
+  );
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.18), baseMaterial);
+  const stock = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.18, 0.3), baseMaterial);
+  const magazine = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.22, 0.18), detailMaterial);
+  const scope = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.28, 12), detailMaterial);
+  const pump = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.1, 0.22), baseMaterial);
 
-  group.add(body, barrel, grip);
-  group.renderOrder = 10;
+  body.position.set(...VIEW_MODEL_PART_DEFAULTS.body.position);
+  barrel.position.set(...VIEW_MODEL_PART_DEFAULTS.barrel.position);
+  grip.position.set(...VIEW_MODEL_PART_DEFAULTS.grip.position);
+  stock.position.set(...VIEW_MODEL_PART_DEFAULTS.stock.position);
+  magazine.position.set(...VIEW_MODEL_PART_DEFAULTS.magazine.position);
+  scope.position.set(...VIEW_MODEL_PART_DEFAULTS.scope.position);
+  scope.rotation.set(...VIEW_MODEL_PART_DEFAULTS.scope.rotation);
+  pump.position.set(...VIEW_MODEL_PART_DEFAULTS.pump.position);
+
+  group.add(body, barrel, grip, stock, magazine, scope, pump);
+  const viewMeshes = [body, barrel, grip, stock, magazine, scope, pump];
+  for (const mesh of viewMeshes) {
+    mesh.renderOrder = VIEW_MODEL_RENDER_ORDER;
+  }
 
   const light = new THREE.PointLight(0xfff1b2, 0.6, 2);
   light.position.set(0.2, 0.1, 0.2);
   group.add(light);
 
-  return { group, body, barrel, grip };
+  return {
+    group,
+    body,
+    barrel,
+    grip,
+    stock,
+    magazine,
+    scope,
+    pump,
+    materials: { base: baseMaterial, accent: accentMaterial, detail: detailMaterial }
+  };
+}
+
+function setMaterialTint(material, colorHex, emissiveScale = 0.18) {
+  if (!material) {
+    return;
+  }
+  material.color.setHex(colorHex);
+  material.emissive.copy(material.color).multiplyScalar(emissiveScale);
+}
+
+function applyViewModelPart(mesh, config, defaults) {
+  if (!mesh) {
+    return;
+  }
+  const resolved = config || {};
+  const visible = resolved.visible !== false;
+  mesh.visible = visible;
+  if (!visible) {
+    return;
+  }
+  const scale = resolved.scale || defaults.scale;
+  mesh.scale.set(scale[0], scale[1], scale[2]);
+  const position = resolved.position || defaults.position;
+  mesh.position.set(position[0], position[1], position[2]);
+  const rotation = resolved.rotation || defaults.rotation;
+  mesh.rotation.set(rotation[0], rotation[1], rotation[2]);
 }
 
 function updateViewModelForWeapon(weaponKey) {
   const profile = VIEW_MODEL_PROFILES[weaponKey] || VIEW_MODEL_PROFILES.rifle;
+  const colors = profile.colors || VIEW_MODEL_DEFAULT_COLORS;
+  const parts = profile.parts || {};
+  setMaterialTint(viewModel.materials.base, colors.base);
+  setMaterialTint(viewModel.materials.accent, colors.accent);
+  setMaterialTint(viewModel.materials.detail, colors.detail);
+
+  applyViewModelPart(viewModel.body, parts.body, VIEW_MODEL_PART_DEFAULTS.body);
+  applyViewModelPart(viewModel.barrel, parts.barrel, VIEW_MODEL_PART_DEFAULTS.barrel);
+  applyViewModelPart(viewModel.grip, parts.grip, VIEW_MODEL_PART_DEFAULTS.grip);
+  applyViewModelPart(viewModel.stock, parts.stock, VIEW_MODEL_PART_DEFAULTS.stock);
+  applyViewModelPart(viewModel.magazine, parts.magazine, VIEW_MODEL_PART_DEFAULTS.magazine);
+  applyViewModelPart(viewModel.scope, parts.scope, VIEW_MODEL_PART_DEFAULTS.scope);
+  applyViewModelPart(viewModel.pump, parts.pump, VIEW_MODEL_PART_DEFAULTS.pump);
+
   viewModelBaseOffset.set(profile.offset.x, profile.offset.y, profile.offset.z);
   recoilState.x = 0;
   recoilState.y = 0;
   recoilState.z = 0;
-  viewModel.body.scale.set(1, 1, profile.bodyScaleZ);
-  viewModel.barrel.scale.set(1, 1, profile.barrelScaleZ);
-  viewModel.barrel.position.z = profile.barrelOffsetZ;
+  const barrelScaleZ = viewModel.barrel.scale.z || 1;
+  viewModelMuzzleLocal.set(0, 0, -VIEW_MODEL_BARREL_LENGTH * 0.5 * barrelScaleZ);
   applyViewModelTransform();
 }
 
@@ -783,9 +982,24 @@ function pushFeed(text) {
   }, 4000);
 }
 
-function showHitmarker() {
-  hitmarkerEl.classList.add("active");
-  setTimeout(() => hitmarkerEl.classList.remove("active"), 150);
+let hitmarkerTimer = null;
+
+function showHitmarker(kind = "player") {
+  if (!hitmarkerEl) {
+    return;
+  }
+  const resolvedKind = kind === "target" ? "target" : "player";
+  hitmarkerEl.classList.remove("player", "target");
+  hitmarkerEl.classList.add("active", resolvedKind);
+  hitmarkerEl.dataset.label = resolvedKind === "target" ? "CIBLE" : "TOUCHE";
+  if (hitmarkerTimer) {
+    clearTimeout(hitmarkerTimer);
+  }
+  hitmarkerTimer = setTimeout(() => {
+    hitmarkerEl.classList.remove("active", "player", "target");
+    hitmarkerEl.dataset.label = "";
+    hitmarkerTimer = null;
+  }, 160);
 }
 
 function flashTarget(targetId) {
@@ -987,6 +1201,7 @@ function spawnMuzzleFlash(origin, dir, options = {}) {
   });
   const mesh = new THREE.Mesh(muzzleGeometry, material);
   mesh.position.copy(position);
+  mesh.renderOrder = EFFECT_RENDER_ORDER;
   scene.add(mesh);
   effects.push({ object: mesh, life: 0.08, maxLife: 0.08, shrink: true });
 }
@@ -1016,6 +1231,11 @@ function renderShot(msg) {
       sideOffset: 0,
       maxLength: isLocal ? 8 : distance
     });
+    spawnProjectile(visualOrigin, dir, distance, {
+      muzzleOffset: muzzleKick * 0.6,
+      sideOffset: 0,
+      maxTravel: isLocal ? 10 : 8
+    });
     if (trace.impact) {
       const end = serverOrigin.clone().add(dir.clone().multiplyScalar(distance));
       spawnImpact(end, trace.impact.type);
@@ -1026,7 +1246,12 @@ function renderShot(msg) {
   }
 
   if (msg.shooterId === localId && msg.hits && msg.hits.length > 0) {
-    showHitmarker();
+    const hasPlayerHit = msg.hits.some((hit) => hit.type !== "target");
+    const hasTargetHit = msg.hits.some((hit) => hit.type === "target");
+    const indicator = hasPlayerHit ? "player" : hasTargetHit ? "target" : null;
+    if (indicator) {
+      showHitmarker(indicator);
+    }
   }
 }
 
@@ -1056,8 +1281,42 @@ function spawnTracer(origin, dir, distance, options = {}) {
   const midpoint = start.clone().add(normalized.clone().multiplyScalar(length / 2));
   mesh.position.copy(midpoint);
   mesh.quaternion.setFromUnitVectors(upVector, normalized);
+  mesh.renderOrder = EFFECT_RENDER_ORDER;
   scene.add(mesh);
   effects.push({ object: mesh, life: 0.2, maxLife: 0.2 });
+}
+
+function spawnProjectile(origin, dir, distance, options = {}) {
+  const normalized = dir.clone();
+  if (normalized.lengthSq() < 1e-6) {
+    return;
+  }
+  normalized.normalize();
+  const right = getRightVector(normalized);
+  const sideOffset = options.sideOffset || 0;
+  const muzzleOffset = options.muzzleOffset || 0.25;
+  const maxTravel = typeof options.maxTravel === "number" ? options.maxTravel : 12;
+  const travelDistance = Math.max(0.6, Math.min(distance, maxTravel));
+  const speed = typeof options.speed === "number" ? options.speed : 80;
+  const life = Math.max(0.08, travelDistance / speed);
+  const position = origin
+    .clone()
+    .add(right.multiplyScalar(sideOffset))
+    .add(normalized.clone().multiplyScalar(muzzleOffset));
+
+  const material = new THREE.MeshBasicMaterial({
+    color: options.color || 0xfff1b2,
+    transparent: true,
+    opacity: 0.95,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false
+  });
+  const mesh = new THREE.Mesh(projectileGeometry, material);
+  mesh.position.copy(position);
+  mesh.renderOrder = EFFECT_RENDER_ORDER;
+  scene.add(mesh);
+  const velocity = normalized.multiplyScalar(travelDistance / life);
+  effects.push({ object: mesh, life, maxLife: life, velocity, shrink: true });
 }
 
 function spawnImpact(position, type) {
@@ -1087,6 +1346,9 @@ function updateEffects(dt) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const effect = effects[i];
     effect.life -= dt;
+    if (effect.velocity) {
+      effect.object.position.addScaledVector(effect.velocity, dt);
+    }
     if (effect.shrink) {
       const scale = Math.max(0.2, effect.life / effect.maxLife);
       effect.object.scale.setScalar(scale);
@@ -1366,6 +1628,9 @@ function updateRemotePlayers(dt) {
   for (const entry of remotePlayers.values()) {
     entry.mesh.position.lerp(entry.targetPosition, 0.2);
     entry.mesh.rotation.y = entry.targetYaw;
+    const targetScale = getStanceScaleY(entry.stance);
+    entry.stanceScale = dampValue(entry.stanceScale ?? 1, targetScale, 18, dt);
+    entry.mesh.scale.set(1, entry.stanceScale, 1);
   }
 }
 
@@ -1443,7 +1708,7 @@ function tryShoot(now) {
   addRecoilImpulse(currentWeapon);
 
   if (connected) {
-    socket.send(JSON.stringify({ type: "shoot" }));
+    socket.send(JSON.stringify({ type: "shoot", stance: player.stance }));
   }
 }
 
@@ -1475,7 +1740,8 @@ function sendState(now) {
       position: { x: player.position.x, y: player.position.y, z: player.position.z },
       yaw: player.yaw,
       pitch: player.pitch,
-      weapon: currentWeapon
+      weapon: currentWeapon,
+      stance: player.stance
     })
   );
 }
@@ -1546,7 +1812,8 @@ function connectControls() {
     if (document.pointerLockElement !== canvas) {
       return;
     }
-    const sensitivity = aiming ? LOOK_SENSITIVITY.scoped : LOOK_SENSITIVITY.normal;
+    const baseSensitivity = aiming ? LOOK_SENSITIVITY.scoped : LOOK_SENSITIVITY.normal;
+    const sensitivity = baseSensitivity * sensitivityMultiplier;
     player.yaw -= event.movementX * sensitivity;
     player.pitch -= event.movementY * sensitivity;
     player.pitch = Math.max(-1.3, Math.min(1.3, player.pitch));
@@ -1611,6 +1878,11 @@ function connectControls() {
       case "ShiftRight":
         input.sprint = true;
         break;
+      case "ControlLeft":
+      case "ControlRight":
+      case "KeyC":
+        input.crouch = true;
+        break;
       case "Space":
         input.jump = true;
         break;
@@ -1668,6 +1940,11 @@ function connectControls() {
       case "ShiftRight":
         input.sprint = false;
         break;
+      case "ControlLeft":
+      case "ControlRight":
+      case "KeyC":
+        input.crouch = false;
+        break;
       case "Space":
         input.jump = false;
         break;
@@ -1699,6 +1976,7 @@ function handleResize() {
 window.addEventListener("resize", handleResize);
 
 initSocket();
+initSensitivityControls();
 connectControls();
 updateWeaponHUD();
 updateViewModelForWeapon(currentWeapon);

@@ -6,10 +6,13 @@ const { WebSocketServer } = require("ws");
 const PORT = process.env.PORT || 3000;
 const TICK_RATE = 20;
 const RESPAWN_DELAY_MS = 3000;
-const EYE_HEIGHT = 1.6;
-const BODY_CENTER_Y = 0.95;
+const PLAYER_STANCES = {
+  stand: { eyeHeight: 1.6, bodyCenter: 0.95, headCenter: 1.65 },
+  crouch: { eyeHeight: 1.05, bodyCenter: 0.8, headCenter: 1.25 },
+  prone: { eyeHeight: 0.55, bodyCenter: 0.45, headCenter: 0.65 }
+};
+const DEFAULT_STANCE = "stand";
 const BODY_RADIUS = 0.45;
-const HEAD_CENTER_Y = 1.65;
 const HEAD_RADIUS = 0.25;
 const FLASH = {
   fuseMs: 1200,
@@ -98,6 +101,18 @@ const MAP = {
     { id: "wall-a", position: { x: -14, y: 1.4, z: 10 }, size: { x: 10, y: 2.8, z: 1.5 } },
     { id: "wall-b", position: { x: 12, y: 1.4, z: -12 }, size: { x: 10, y: 2.8, z: 1.5 } },
     { id: "pillar", position: { x: 0, y: 1.8, z: -16 }, size: { x: 2.8, y: 3.6, z: 2.8 } },
+
+    // Decors supplementaires
+    { id: "crate-stack-a", position: { x: 22, y: 1.6, z: -2 }, size: { x: 4, y: 3.2, z: 2.4 } },
+    { id: "crate-stack-b", position: { x: -22, y: 1.4, z: 2 }, size: { x: 3.6, y: 2.8, z: 3.6 } },
+    { id: "low-barrier-n", position: { x: 0, y: 0.8, z: 26 }, size: { x: 12, y: 1.6, z: 1.2 } },
+    { id: "low-barrier-s", position: { x: -6, y: 0.8, z: -26 }, size: { x: 10, y: 1.6, z: 1.2 } },
+    { id: "pillar-east", position: { x: 26, y: 1.6, z: 16 }, size: { x: 2.4, y: 3.2, z: 2.4 } },
+    { id: "pillar-west", position: { x: -26, y: 1.6, z: -16 }, size: { x: 2.4, y: 3.2, z: 2.4 } },
+    { id: "bench-a", position: { x: 6, y: 0.4, z: 14 }, size: { x: 4, y: 0.8, z: 2 } },
+    { id: "bench-b", position: { x: -6, y: 0.4, z: -10 }, size: { x: 4, y: 0.8, z: 2 } },
+    { id: "wall-mid-a", position: { x: 4, y: 1.3, z: -2 }, size: { x: 1.5, y: 2.6, z: 7 } },
+    { id: "wall-mid-b", position: { x: -4, y: 1.3, z: 2 }, size: { x: 1.5, y: 2.6, z: 7 } },
 
     // Tour centrale (4-5 m) avec escalier interieur et vue 360
     { id: "tower-north-lower-left", position: { x: -3, y: 0.45, z: -4.1 }, size: { x: 2.2, y: 0.9, z: 0.6 } },
@@ -198,7 +213,8 @@ function createPlayer() {
     lastFlashAt: 0,
     kills: 0,
     deaths: 0,
-    dead: false
+    dead: false,
+    stance: DEFAULT_STANCE
   };
 }
 
@@ -238,6 +254,14 @@ function sanitizePlayerName(name, fallbackId) {
   return cleaned.slice(0, 16);
 }
 
+function normalizeStance(stance) {
+  return PLAYER_STANCES[stance] ? stance : DEFAULT_STANCE;
+}
+
+function getStanceProfile(stance) {
+  return PLAYER_STANCES[normalizeStance(stance)];
+}
+
 // Convention alignee avec Three.js: yaw=0 regarde vers -Z.
 function dirFromYawPitch(yaw, pitch) {
   const cp = Math.cos(pitch);
@@ -275,10 +299,11 @@ function scheduleFlashExplosion(player, charge) {
   const clampedCharge = clamp(typeof charge === "number" ? charge : 1, 0, 1);
   const throwSpeed =
     FLASH.throwSpeedMin + (FLASH.throwSpeedMax - FLASH.throwSpeedMin) * clampedCharge;
+  const stance = getStanceProfile(player.stance);
   const dir = dirFromYawPitch(player.yaw, clamp(player.pitch, -0.2, 0.35));
   const start = {
     x: player.position.x,
-    y: player.position.y + EYE_HEIGHT,
+    y: player.position.y + stance.eyeHeight,
     z: player.position.z
   };
   const velocity = {
@@ -407,14 +432,15 @@ function findHit(origin, dir, range, shooterId, obstacleHit) {
       continue;
     }
 
+    const stance = getStanceProfile(player.stance);
     const bodyCenter = {
       x: player.position.x,
-      y: player.position.y + BODY_CENTER_Y,
+      y: player.position.y + stance.bodyCenter,
       z: player.position.z
     };
     const headCenter = {
       x: player.position.x,
-      y: player.position.y + HEAD_CENTER_Y,
+      y: player.position.y + stance.headCenter,
       z: player.position.z
     };
 
@@ -518,7 +544,7 @@ function handleShoot(player) {
 
   const origin = {
     x: player.position.x,
-    y: player.position.y + EYE_HEIGHT,
+    y: player.position.y + getStanceProfile(player.stance).eyeHeight,
     z: player.position.z
   };
   const baseDir = dirFromYawPitch(player.yaw, player.pitch);
@@ -640,6 +666,9 @@ wss.on("connection", (ws) => {
       if (typeof msg.weapon === "string" && WEAPONS[msg.weapon]) {
         current.weapon = msg.weapon;
       }
+      if (typeof msg.stance === "string") {
+        current.stance = normalizeStance(msg.stance);
+      }
     }
 
     if (msg.type === "set_name") {
@@ -647,6 +676,9 @@ wss.on("connection", (ws) => {
     }
 
     if (msg.type === "shoot") {
+      if (typeof msg.stance === "string") {
+        current.stance = normalizeStance(msg.stance);
+      }
       handleShoot(current);
     }
 
@@ -681,6 +713,7 @@ setInterval(() => {
     pitch: player.pitch,
     health: player.health,
     weapon: player.weapon,
+    stance: player.stance,
     dead: player.dead,
     kills: player.kills,
     deaths: player.deaths
