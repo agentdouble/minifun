@@ -10,6 +10,8 @@ const feedEl = document.getElementById("feed");
 const hitmarkerEl = document.getElementById("hitmarker");
 const crosshairEl = document.getElementById("crosshair");
 const scopeEl = document.getElementById("scope");
+const flashEl = document.getElementById("flash");
+const flashStatusEl = document.getElementById("flash-status");
 const nameInput = document.getElementById("player-name");
 
 const scene = new THREE.Scene();
@@ -171,9 +173,17 @@ const MOVEMENT = {
 
 const remotePlayers = new Map();
 const effects = [];
+const grenades = [];
 const tracerGeometry = new THREE.CylinderGeometry(0.03, 0.015, 1, 6, 1, true);
 const impactGeometry = new THREE.SphereGeometry(0.12, 8, 8);
 const muzzleGeometry = new THREE.SphereGeometry(0.14, 8, 8);
+const grenadeGeometry = new THREE.SphereGeometry(0.12, 12, 12);
+const grenadeMaterial = new THREE.MeshStandardMaterial({
+  color: 0xf7c944,
+  roughness: 0.4,
+  metalness: 0.15,
+  emissive: new THREE.Color(0x2a2108)
+});
 const upVector = new THREE.Vector3(0, 1, 0);
 const targetNormalAxis = new THREE.Vector3(0, 0, 1);
 const baseTargetFaceMaterial = new THREE.MeshStandardMaterial({
@@ -249,6 +259,27 @@ let lastSentName = null;
 const LOOK_SENSITIVITY = {
   normal: 0.002,
   scoped: 0.0007
+};
+const FLASH_SETTINGS = {
+  maxRadius: 150,
+  minHold: 0.15,
+  maxHold: 0.8,
+  minFade: 0.6,
+  maxFade: 2.0,
+  throwCooldown: 4500,
+  gravity: 26,
+  maxChargeMs: 700
+};
+
+const flashState = {
+  peak: 0,
+  holdUntil: 0,
+  fadeEnd: 0
+};
+let lastFlashThrowAt = 0;
+const flashThrowState = {
+  holding: false,
+  holdStart: 0
 };
 
 function setAiming(enabled) {
@@ -368,6 +399,18 @@ function initSocket() {
 
     if (msg.type === "shot") {
       renderShot(msg);
+    }
+
+    if (msg.type === "flash" && msg.origin) {
+      const origin = new THREE.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
+      const radius = typeof msg.radius === "number" ? msg.radius : FLASH_SETTINGS.maxRadius;
+      const strength = computeFlashStrength(origin, radius);
+      triggerFlash(strength);
+    }
+
+    if (msg.type === "flash_throw" && msg.origin && msg.velocity) {
+      const fuseMs = typeof msg.fuseMs === "number" ? msg.fuseMs : 1200;
+      spawnFlashGrenade(msg.origin, msg.velocity, fuseMs);
     }
 
     if (msg.type === "death") {
@@ -772,6 +815,156 @@ function getRightVector(direction) {
   return right;
 }
 
+function dirFromYawPitch(yaw, pitch) {
+  const cp = Math.cos(pitch);
+  return new THREE.Vector3(
+    -Math.sin(yaw) * cp,
+    Math.sin(pitch),
+    -Math.cos(yaw) * cp
+  );
+}
+
+function rayAABB(origin, dir, box) {
+  let tmin = -Infinity;
+  let tmax = Infinity;
+
+  const axes = ["x", "y", "z"];
+  for (const axis of axes) {
+    const o = origin[axis];
+    const d = dir[axis];
+    const min = box.min[axis];
+    const max = box.max[axis];
+
+    if (Math.abs(d) < 1e-6) {
+      if (o < min || o > max) {
+        return null;
+      }
+      continue;
+    }
+
+    const t1 = (min - o) / d;
+    const t2 = (max - o) / d;
+    const tNear = Math.min(t1, t2);
+    const tFar = Math.max(t1, t2);
+    tmin = Math.max(tmin, tNear);
+    tmax = Math.min(tmax, tFar);
+
+    if (tmin > tmax) {
+      return null;
+    }
+  }
+
+  if (tmax < 0) {
+    return null;
+  }
+
+  return tmin >= 0 ? tmin : tmax;
+}
+
+function isFlashOccluded(origin, target, distance) {
+  const dir = target.clone().sub(origin);
+  if (dir.lengthSq() < 1e-6) {
+    return false;
+  }
+  dir.normalize();
+  for (const obstacle of obstacles) {
+    const hit = rayAABB(origin, dir, obstacle);
+    if (hit !== null && hit < distance - 0.2) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function computeFlashStrength(origin, radius) {
+  const eye = new THREE.Vector3(
+    player.position.x,
+    player.position.y + EYE_HEIGHT,
+    player.position.z
+  );
+  const toFlash = new THREE.Vector3().subVectors(origin, eye);
+  const distance = toFlash.length();
+  if (distance < 0.01 || distance > radius) {
+    return 0;
+  }
+
+  const dirToFlash = toFlash.clone().normalize();
+  const viewDir = dirFromYawPitch(player.yaw, player.pitch).normalize();
+  const cosHalfFov = Math.cos(THREE.MathUtils.degToRad(camera.fov * 0.5));
+  const dot = viewDir.dot(dirToFlash);
+  const inView = dot >= cosHalfFov;
+  const blocked = isFlashOccluded(eye, origin, distance);
+
+  let distanceFactor = Math.max(0, 1 - distance / radius);
+  distanceFactor *= distanceFactor;
+
+  const angleBack = THREE.MathUtils.clamp(dot + 1, 0, 1);
+  let angleFactor = dot >= 0 ? 1 : Math.pow(angleBack, 0.35);
+  if (inView) {
+    angleFactor = 1;
+  }
+
+  if (blocked) {
+    angleFactor *= 0.25;
+  }
+
+  let strength = distanceFactor * angleFactor;
+  if (inView && !blocked) {
+    strength = Math.max(strength, 0.95);
+  }
+
+  return THREE.MathUtils.clamp(strength, 0, 1);
+}
+
+function triggerFlash(strength) {
+  if (!flashEl || strength <= 0) {
+    return;
+  }
+  const now = performance.now();
+  if (strength < flashState.peak && now < flashState.fadeEnd) {
+    return;
+  }
+
+  flashState.peak = strength;
+  const hold = THREE.MathUtils.lerp(FLASH_SETTINGS.minHold, FLASH_SETTINGS.maxHold, strength);
+  const fade = THREE.MathUtils.lerp(FLASH_SETTINGS.minFade, FLASH_SETTINGS.maxFade, strength);
+  flashState.holdUntil = now + hold * 1000;
+  flashState.fadeEnd = flashState.holdUntil + fade * 1000;
+}
+
+function updateFlash(now) {
+  if (!flashEl) {
+    return;
+  }
+  let opacity = 0;
+  if (now < flashState.holdUntil) {
+    opacity = flashState.peak;
+  } else if (now < flashState.fadeEnd) {
+    const t = (now - flashState.holdUntil) / (flashState.fadeEnd - flashState.holdUntil);
+    opacity = flashState.peak * (1 - t);
+  }
+  flashEl.style.opacity = opacity.toFixed(3);
+}
+
+function updateFlashStatus(now) {
+  if (!flashStatusEl) {
+    return;
+  }
+  if (flashThrowState.holding) {
+    const heldMs = now - flashThrowState.holdStart;
+    const charge = Math.min(1, heldMs / FLASH_SETTINGS.maxChargeMs);
+    const percent = Math.round(charge * 100);
+    flashStatusEl.textContent = `FLASH: ${percent}%`;
+    return;
+  }
+  const remaining = FLASH_SETTINGS.throwCooldown - (now - lastFlashThrowAt);
+  if (remaining <= 0) {
+    flashStatusEl.textContent = "FLASH: PRETE";
+  } else {
+    flashStatusEl.textContent = `FLASH: ${Math.ceil(remaining / 100) / 10}s`;
+  }
+}
+
 function spawnMuzzleFlash(origin, dir, options = {}) {
   const normalized = dir.clone();
   if (normalized.lengthSq() < 1e-6) {
@@ -877,6 +1070,19 @@ function spawnImpact(position, type) {
   effects.push({ object: mesh, life: 0.2, maxLife: 0.2, shrink: true });
 }
 
+function spawnFlashGrenade(origin, velocity, fuseMs) {
+  const mesh = new THREE.Mesh(grenadeGeometry, grenadeMaterial.clone());
+  mesh.position.set(origin.x, origin.y, origin.z);
+  scene.add(mesh);
+  grenades.push({
+    mesh,
+    velocity: new THREE.Vector3(velocity.x, velocity.y, velocity.z),
+    fuseMs,
+    elapsedMs: 0,
+    landed: false
+  });
+}
+
 function updateEffects(dt) {
   for (let i = effects.length - 1; i >= 0; i--) {
     const effect = effects[i];
@@ -894,6 +1100,30 @@ function updateEffects(dt) {
         effect.object.material.dispose();
       }
       effects.splice(i, 1);
+    }
+  }
+}
+
+function updateGrenades(dt) {
+  for (let i = grenades.length - 1; i >= 0; i--) {
+    const grenade = grenades[i];
+    grenade.elapsedMs += dt * 1000;
+    if (!grenade.landed) {
+      grenade.velocity.y -= FLASH_SETTINGS.gravity * dt;
+      grenade.mesh.position.addScaledVector(grenade.velocity, dt);
+      if (grenade.mesh.position.y <= 0) {
+        grenade.mesh.position.y = 0;
+        grenade.velocity.set(0, 0, 0);
+        grenade.landed = true;
+        grenade.mesh.material.emissive.set(0x1a1a1a);
+      }
+    }
+    if (grenade.elapsedMs >= grenade.fuseMs) {
+      scene.remove(grenade.mesh);
+      if (grenade.mesh.material) {
+        grenade.mesh.material.dispose();
+      }
+      grenades.splice(i, 1);
     }
   }
 }
@@ -1217,6 +1447,20 @@ function tryShoot(now) {
   }
 }
 
+function tryThrowFlash(now, charge) {
+  if (!connected || !socket || !localId) {
+    return;
+  }
+  if (localDead || document.pointerLockElement !== canvas) {
+    return;
+  }
+  if (now - lastFlashThrowAt < FLASH_SETTINGS.throwCooldown) {
+    return;
+  }
+  lastFlashThrowAt = now;
+  socket.send(JSON.stringify({ type: "throw_flash", charge }));
+}
+
 function sendState(now) {
   if (!connected || !localId || localDead) {
     return;
@@ -1246,6 +1490,9 @@ function animate(now) {
   updateRecoil(dt);
   updateRemotePlayers(dt);
   updateEffects(dt);
+  updateGrenades(dt);
+  updateFlash(now);
+  updateFlashStatus(now);
   sendState(now);
 
   renderer.render(scene, camera);
@@ -1260,6 +1507,7 @@ function handlePointerLockChange() {
     aimHeld = false;
     setAiming(false);
     setLeaderboardVisible(false);
+    flashThrowState.holding = false;
   }
 }
 
@@ -1344,6 +1592,20 @@ function connectControls() {
       input.right = true;
     }
 
+    if (event.code === "KeyF") {
+      if (!flashThrowState.holding && !event.repeat) {
+        if (
+          document.pointerLockElement === canvas &&
+          !localDead &&
+          performance.now() - lastFlashThrowAt >= FLASH_SETTINGS.throwCooldown
+        ) {
+          flashThrowState.holding = true;
+          flashThrowState.holdStart = performance.now();
+        }
+      }
+      return;
+    }
+
     switch (event.code) {
       case "ShiftLeft":
       case "ShiftRight":
@@ -1389,6 +1651,16 @@ function connectControls() {
       input.left = false;
     } else if (matchesKey(event, ["d"], ["KeyD"])) {
       input.right = false;
+    }
+
+    if (event.code === "KeyF") {
+      if (flashThrowState.holding) {
+        const heldMs = performance.now() - flashThrowState.holdStart;
+        const charge = Math.min(1, heldMs / FLASH_SETTINGS.maxChargeMs);
+        tryThrowFlash(performance.now(), charge);
+        flashThrowState.holding = false;
+      }
+      return;
     }
 
     switch (event.code) {

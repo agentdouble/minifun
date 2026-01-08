@@ -11,6 +11,17 @@ const BODY_CENTER_Y = 0.95;
 const BODY_RADIUS = 0.45;
 const HEAD_CENTER_Y = 1.65;
 const HEAD_RADIUS = 0.25;
+const FLASH = {
+  fuseMs: 1200,
+  cooldownMs: 4500,
+  maxRadius: 150,
+  throwDistance: 11,
+  throwHeight: 0.6,
+  throwSpeedMin: 7,
+  throwSpeedMax: 60,
+  upBoost: 3.2,
+  gravity: 26
+};
 
 const WEAPONS = {
   pistol: {
@@ -184,6 +195,7 @@ function createPlayer() {
     health: 100,
     weapon: "rifle",
     lastShotAt: 0,
+    lastFlashAt: 0,
     kills: 0,
     deaths: 0,
     dead: false
@@ -243,6 +255,62 @@ function applySpread(dir, spread) {
   const yaw = Math.atan2(-dir.x, -dir.z) + (Math.random() - 0.5) * spread;
   const pitch = Math.asin(dir.y) + (Math.random() - 0.5) * spread;
   return dirFromYawPitch(yaw, pitch);
+}
+
+function clampToBounds(position) {
+  return {
+    x: clamp(position.x, MAP.bounds.minX, MAP.bounds.maxX),
+    y: clamp(position.y, 0, 6),
+    z: clamp(position.z, MAP.bounds.minZ, MAP.bounds.maxZ)
+  };
+}
+
+function scheduleFlashExplosion(player, charge) {
+  const now = Date.now();
+  if (now - player.lastFlashAt < FLASH.cooldownMs) {
+    return;
+  }
+  player.lastFlashAt = now;
+
+  const clampedCharge = clamp(typeof charge === "number" ? charge : 1, 0, 1);
+  const throwSpeed =
+    FLASH.throwSpeedMin + (FLASH.throwSpeedMax - FLASH.throwSpeedMin) * clampedCharge;
+  const dir = dirFromYawPitch(player.yaw, clamp(player.pitch, -0.2, 0.35));
+  const start = {
+    x: player.position.x,
+    y: player.position.y + EYE_HEIGHT,
+    z: player.position.z
+  };
+  const velocity = {
+    x: dir.x * throwSpeed,
+    y: dir.y * throwSpeed + FLASH.upBoost,
+    z: dir.z * throwSpeed
+  };
+  const t = FLASH.fuseMs / 1000;
+  const predicted = {
+    x: start.x + velocity.x * t,
+    y: start.y + velocity.y * t - 0.5 * FLASH.gravity * t * t,
+    z: start.z + velocity.z * t
+  };
+  if (predicted.y < 0) {
+    predicted.y = 0;
+  }
+  const explosion = clampToBounds(predicted);
+
+  broadcast({
+    type: "flash_throw",
+    origin: start,
+    velocity,
+    fuseMs: FLASH.fuseMs
+  });
+
+  setTimeout(() => {
+    broadcast({
+      type: "flash",
+      origin: explosion,
+      radius: FLASH.maxRadius
+    });
+  }, FLASH.fuseMs);
 }
 
 function raySphere(origin, dir, center, radius) {
@@ -585,6 +653,12 @@ wss.on("connection", (ws) => {
     if (msg.type === "switch_weapon") {
       if (typeof msg.weapon === "string" && WEAPONS[msg.weapon]) {
         current.weapon = msg.weapon;
+      }
+    }
+
+    if (msg.type === "throw_flash") {
+      if (!current.dead) {
+        scheduleFlashExplosion(current, msg.charge);
       }
     }
   });
