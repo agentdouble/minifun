@@ -172,7 +172,76 @@ const MAP = {
     { id: "stairs-left-step-6", position: { x: -28, y: 1.375, z: 12.6 }, size: { x: 6, y: 0.25, z: 1.2 } },
     { id: "stairs-left-platform", position: { x: -28, y: 1.65, z: 17.2 }, size: { x: 8, y: 0.3, z: 8 } },
     { id: "stairs-left-rail-n", position: { x: -28, y: 2.1, z: 21.1 }, size: { x: 8, y: 0.9, z: 0.3 } },
-    { id: "stairs-left-rail-w", position: { x: -31.85, y: 2.1, z: 17.2 }, size: { x: 0.3, y: 0.9, z: 8 } }
+    { id: "stairs-left-rail-w", position: { x: -31.85, y: 2.1, z: 17.2 }, size: { x: 0.3, y: 0.9, z: 8 } },
+
+    // Tours secondaires (style "tower" + escalier)
+    { id: "watchtower-east-platform", position: { x: 28, y: 2.49, z: -20 }, size: { x: 5.4, y: 0.18, z: 5.4 } },
+    { id: "watchtower-east-pillar-nw", position: { x: 25.6, y: 1.2, z: -22.4 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-east-pillar-ne", position: { x: 30.4, y: 1.2, z: -22.4 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-east-pillar-sw", position: { x: 25.6, y: 1.2, z: -17.6 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-east-pillar-se", position: { x: 30.4, y: 1.2, z: -17.6 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-east-parapet-n", position: { x: 28, y: 3.0, z: -22.55 }, size: { x: 5.4, y: 0.9, z: 0.3 } },
+    { id: "watchtower-east-parapet-w", position: { x: 25.45, y: 3.0, z: -20 }, size: { x: 0.3, y: 0.9, z: 5.4 } },
+    { id: "watchtower-east-parapet-e", position: { x: 30.55, y: 3.0, z: -20 }, size: { x: 0.3, y: 0.9, z: 5.4 } },
+    { id: "watchtower-east-parapet-s-left", position: { x: 26.05, y: 3.0, z: -17.45 }, size: { x: 1.5, y: 0.9, z: 0.3 } },
+    { id: "watchtower-east-parapet-s-right", position: { x: 29.95, y: 3.0, z: -17.45 }, size: { x: 1.5, y: 0.9, z: 0.3 } },
+    { id: "watchtower-east-step-1", position: { x: 28, y: 0.21, z: -11.25 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-east-step-2", position: { x: 28, y: 0.63, z: -12.35 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-east-step-3", position: { x: 28, y: 1.05, z: -13.45 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-east-step-4", position: { x: 28, y: 1.47, z: -14.55 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-east-step-5", position: { x: 28, y: 1.89, z: -15.65 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-east-step-6", position: { x: 28, y: 2.31, z: -16.75 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+
+    { id: "watchtower-west-platform", position: { x: -30, y: 2.49, z: -6 }, size: { x: 5.4, y: 0.18, z: 5.4 } },
+    { id: "watchtower-west-pillar-nw", position: { x: -32.4, y: 1.2, z: -8.4 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-west-pillar-ne", position: { x: -27.6, y: 1.2, z: -8.4 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-west-pillar-sw", position: { x: -32.4, y: 1.2, z: -3.6 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-west-pillar-se", position: { x: -27.6, y: 1.2, z: -3.6 }, size: { x: 0.6, y: 2.4, z: 0.6 } },
+    { id: "watchtower-west-parapet-n", position: { x: -30, y: 3.0, z: -8.55 }, size: { x: 5.4, y: 0.9, z: 0.3 } },
+    { id: "watchtower-west-parapet-w", position: { x: -32.55, y: 3.0, z: -6 }, size: { x: 0.3, y: 0.9, z: 5.4 } },
+    { id: "watchtower-west-parapet-e", position: { x: -27.45, y: 3.0, z: -6 }, size: { x: 0.3, y: 0.9, z: 5.4 } },
+    { id: "watchtower-west-parapet-s-left", position: { x: -31.95, y: 3.0, z: -3.45 }, size: { x: 1.5, y: 0.9, z: 0.3 } },
+    { id: "watchtower-west-parapet-s-right", position: { x: -28.05, y: 3.0, z: -3.45 }, size: { x: 1.5, y: 0.9, z: 0.3 } },
+    { id: "watchtower-west-step-1", position: { x: -30, y: 0.21, z: 2.75 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-west-step-2", position: { x: -30, y: 0.63, z: 1.65 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-west-step-3", position: { x: -30, y: 1.05, z: 0.55 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-west-step-4", position: { x: -30, y: 1.47, z: -0.55 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-west-step-5", position: { x: -30, y: 1.89, z: -1.65 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+    { id: "watchtower-west-step-6", position: { x: -30, y: 2.31, z: -2.75 }, size: { x: 2.2, y: 0.42, z: 1.1 } },
+
+    // Maisons (blocs) avec fenetre pour se planquer / peek
+    { id: "house-north-center-roof", position: { x: 0, y: 2.35, z: 18 }, size: { x: 7.4, y: 0.18, z: 7.4 } },
+    { id: "house-north-center-wall-n-bottom", position: { x: 0, y: 0.5, z: 14.7 }, size: { x: 7, y: 1.0, z: 0.4 } },
+    { id: "house-north-center-wall-n-mid-left", position: { x: -2.3, y: 1.35, z: 14.7 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-north-center-wall-n-mid-right", position: { x: 2.3, y: 1.35, z: 14.7 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-north-center-wall-n-top", position: { x: 0, y: 1.95, z: 14.7 }, size: { x: 7, y: 0.5, z: 0.4 } },
+    { id: "house-north-center-wall-s-left", position: { x: -2.2, y: 1.1, z: 21.3 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-north-center-wall-s-right", position: { x: 2.2, y: 1.1, z: 21.3 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-north-center-wall-e", position: { x: 3.3, y: 1.1, z: 18 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-north-center-wall-w", position: { x: -3.3, y: 1.1, z: 18 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-north-center-table", position: { x: 0, y: 0.45, z: 18 }, size: { x: 2.2, y: 0.9, z: 1.2 } },
+
+    { id: "house-north-east-roof", position: { x: 26, y: 2.35, z: 24 }, size: { x: 7.4, y: 0.18, z: 7.4 } },
+    { id: "house-north-east-wall-n-bottom", position: { x: 26, y: 0.5, z: 20.7 }, size: { x: 7, y: 1.0, z: 0.4 } },
+    { id: "house-north-east-wall-n-mid-left", position: { x: 23.7, y: 1.35, z: 20.7 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-north-east-wall-n-mid-right", position: { x: 28.3, y: 1.35, z: 20.7 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-north-east-wall-n-top", position: { x: 26, y: 1.95, z: 20.7 }, size: { x: 7, y: 0.5, z: 0.4 } },
+    { id: "house-north-east-wall-s-left", position: { x: 23.8, y: 1.1, z: 27.3 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-north-east-wall-s-right", position: { x: 28.2, y: 1.1, z: 27.3 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-north-east-wall-e", position: { x: 29.3, y: 1.1, z: 24 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-north-east-wall-w", position: { x: 22.7, y: 1.1, z: 24 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-north-east-table", position: { x: 26, y: 0.45, z: 24 }, size: { x: 2.2, y: 0.9, z: 1.2 } },
+
+    { id: "house-south-west-roof", position: { x: -26, y: 2.35, z: -26 }, size: { x: 7.4, y: 0.18, z: 7.4 } },
+    { id: "house-south-west-wall-n-bottom", position: { x: -26, y: 0.5, z: -29.3 }, size: { x: 7, y: 1.0, z: 0.4 } },
+    { id: "house-south-west-wall-n-mid-left", position: { x: -28.3, y: 1.35, z: -29.3 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-south-west-wall-n-mid-right", position: { x: -23.7, y: 1.35, z: -29.3 }, size: { x: 2.4, y: 0.7, z: 0.4 } },
+    { id: "house-south-west-wall-n-top", position: { x: -26, y: 1.95, z: -29.3 }, size: { x: 7, y: 0.5, z: 0.4 } },
+    { id: "house-south-west-wall-s-left", position: { x: -28.2, y: 1.1, z: -22.7 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-south-west-wall-s-right", position: { x: -23.8, y: 1.1, z: -22.7 }, size: { x: 2.6, y: 2.2, z: 0.4 } },
+    { id: "house-south-west-wall-e", position: { x: -22.7, y: 1.1, z: -26 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-south-west-wall-w", position: { x: -29.3, y: 1.1, z: -26 }, size: { x: 0.4, y: 2.2, z: 7 } },
+    { id: "house-south-west-table", position: { x: -26, y: 0.45, z: -26 }, size: { x: 2.2, y: 0.9, z: 1.2 } }
   ],
   targets: [
     { id: "target-1", position: { x: -28, y: 1.4, z: -10 }, radius: 0.55 },
@@ -526,7 +595,7 @@ function resolveImpact(origin, dir, weapon, shooterId) {
   return { distance: weapon.range, impact: null };
 }
 
-function handleShoot(player) {
+function handleShoot(player, shotId) {
   if (player.dead) {
     return;
   }
@@ -602,14 +671,18 @@ function handleShoot(player) {
     }
   }
 
-  broadcast({
+  const payload = {
     type: "shot",
     shooterId: player.id,
     origin,
     weapon: player.weapon,
     traces,
     hits
-  });
+  };
+  if (Number.isInteger(shotId)) {
+    payload.shotId = shotId;
+  }
+  broadcast(payload);
 }
 
 wss.on("connection", (ws) => {
@@ -679,7 +752,19 @@ wss.on("connection", (ws) => {
       if (typeof msg.stance === "string") {
         current.stance = normalizeStance(msg.stance);
       }
-      handleShoot(current);
+      if (msg.position) {
+        current.position.x = clamp(msg.position.x, MAP.bounds.minX, MAP.bounds.maxX);
+        current.position.y = clamp(msg.position.y, 0, 5);
+        current.position.z = clamp(msg.position.z, MAP.bounds.minZ, MAP.bounds.maxZ);
+      }
+      if (typeof msg.yaw === "number") {
+        current.yaw = msg.yaw;
+      }
+      if (typeof msg.pitch === "number") {
+        current.pitch = clamp(msg.pitch, -1.3, 1.3);
+      }
+      const shotId = Number.isInteger(msg.shotId) ? msg.shotId : null;
+      handleShoot(current, shotId);
     }
 
     if (msg.type === "switch_weapon") {

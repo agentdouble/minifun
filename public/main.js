@@ -318,6 +318,8 @@ let leaderboardHeld = false;
 let lastSentName = null;
 let lastLocalHealth = null;
 let damageVignetteTimer = null;
+let nextShotId = 1;
+const pendingLocalShotIds = new Set();
 
 const LOOK_SENSITIVITY = {
   normal: 0.002,
@@ -926,6 +928,39 @@ function updateViewModelForWeapon(weaponKey) {
   applyViewModelTransform();
 }
 
+let diamondGlowTexture = null;
+
+function getDiamondGlowTexture() {
+  if (diamondGlowTexture) {
+    return diamondGlowTexture;
+  }
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    diamondGlowTexture = new THREE.Texture();
+    return diamondGlowTexture;
+  }
+
+  const center = size * 0.5;
+  const gradient = ctx.createRadialGradient(center, center, 0, center, center, center);
+  gradient.addColorStop(0, "rgba(203, 250, 255, 1)");
+  gradient.addColorStop(0.22, "rgba(155, 240, 255, 0.9)");
+  gradient.addColorStop(0.5, "rgba(111, 220, 255, 0.25)");
+  gradient.addColorStop(1, "rgba(111, 220, 255, 0)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, size, size);
+
+  diamondGlowTexture = new THREE.CanvasTexture(canvas);
+  diamondGlowTexture.colorSpace = THREE.SRGBColorSpace;
+  diamondGlowTexture.minFilter = THREE.LinearFilter;
+  diamondGlowTexture.magFilter = THREE.LinearFilter;
+  diamondGlowTexture.generateMipmaps = false;
+  return diamondGlowTexture;
+}
+
 function createPlayerMesh(color, options = {}) {
   const group = new THREE.Group();
   const diamond = Boolean(options.diamond);
@@ -935,33 +970,39 @@ function createPlayerMesh(color, options = {}) {
   const accentGeometry = new THREE.BoxGeometry(0.18, 0.18, 0.4);
 
   const bodyMaterial = diamond
-    ? new THREE.MeshStandardMaterial({
+    ? new THREE.MeshPhysicalMaterial({
         color: 0xcff5ff,
         emissive: new THREE.Color(0x6edbff),
-        emissiveIntensity: 0.55,
+        emissiveIntensity: 1.15,
         metalness: 1,
-        roughness: 0.04,
-        envMapIntensity: 1.3
+        roughness: 0.015,
+        clearcoat: 1,
+        clearcoatRoughness: 0.02,
+        envMapIntensity: 1.6
       })
     : new THREE.MeshStandardMaterial({ color });
   const headMaterial = diamond
-    ? new THREE.MeshStandardMaterial({
+    ? new THREE.MeshPhysicalMaterial({
         color: 0xe1fbff,
         emissive: new THREE.Color(0x8be9ff),
-        emissiveIntensity: 0.5,
-        metalness: 0.96,
-        roughness: 0.05,
-        envMapIntensity: 1.2
+        emissiveIntensity: 1.05,
+        metalness: 1,
+        roughness: 0.02,
+        clearcoat: 1,
+        clearcoatRoughness: 0.02,
+        envMapIntensity: 1.55
       })
     : new THREE.MeshStandardMaterial({ color: color.clone().offsetHSL(0, -0.1, 0.2) });
   const accentMaterial = diamond
-    ? new THREE.MeshStandardMaterial({
+    ? new THREE.MeshPhysicalMaterial({
         color: 0xffffff,
         emissive: new THREE.Color(0x9bf0ff),
-        emissiveIntensity: 0.45,
-        metalness: 0.9,
-        roughness: 0.02,
-        envMapIntensity: 1.2
+        emissiveIntensity: 0.95,
+        metalness: 1,
+        roughness: 0.01,
+        clearcoat: 1,
+        clearcoatRoughness: 0.015,
+        envMapIntensity: 1.5
       })
     : new THREE.MeshStandardMaterial({ color: 0x131722 });
 
@@ -973,14 +1014,77 @@ function createPlayerMesh(color, options = {}) {
   accent.position.set(0, 1.4, 0.45);
 
   if (diamond) {
-    const sparkle = new THREE.PointLight(0x9bf0ff, 1.2, 7);
-    sparkle.position.set(0, 1.2, 0);
+    const sparkle = new THREE.PointLight(0xb6f5ff, 2.8, 9);
+    sparkle.position.set(0, 1.25, 0.35);
     group.add(sparkle);
+
+    const glow = new THREE.Sprite(
+      new THREE.SpriteMaterial({
+        map: getDiamondGlowTexture(),
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.85,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    glow.position.set(0, 1.15, 0);
+    glow.scale.set(2.2, 2.2, 1);
+    group.add(glow);
+
+    group.userData.diamondShine = {
+      phase: Math.random() * Math.PI * 2,
+      sparkle,
+      glow,
+      baseLightIntensity: sparkle.intensity,
+      baseGlowOpacity: glow.material.opacity,
+      baseGlowScale: glow.scale.x,
+      materials: [
+        { material: bodyMaterial, baseEmissiveIntensity: bodyMaterial.emissiveIntensity },
+        { material: headMaterial, baseEmissiveIntensity: headMaterial.emissiveIntensity },
+        { material: accentMaterial, baseEmissiveIntensity: accentMaterial.emissiveIntensity }
+      ]
+    };
   }
   group.userData.diamond = Boolean(diamond);
 
   group.add(body, head, accent);
   return group;
+}
+
+function updateDiamondShine(mesh, now) {
+  if (!mesh?.userData?.diamond) {
+    return;
+  }
+  const config = mesh.userData.diamondShine;
+  if (!config) {
+    return;
+  }
+
+  const t = now * 0.001;
+  const pulse = 0.5 + 0.5 * Math.sin(t * 6 + config.phase);
+  const shimmer = 0.5 + 0.5 * Math.sin(t * 17 + config.phase * 3.1);
+  const lightIntensity =
+    config.baseLightIntensity * (1.4 + pulse * 1.2) * (0.85 + shimmer * 0.3);
+  config.sparkle.intensity = lightIntensity;
+
+  const orbitRadius = 0.35;
+  config.sparkle.position.set(
+    Math.cos(t * 1.6 + config.phase) * orbitRadius,
+    1.25 + Math.sin(t * 2.2 + config.phase) * 0.18,
+    Math.sin(t * 1.6 + config.phase) * orbitRadius
+  );
+
+  for (const entry of config.materials) {
+    entry.material.emissiveIntensity = entry.baseEmissiveIntensity * (1.15 + pulse * 1.1);
+  }
+
+  if (config.glow) {
+    const glowPulse = 0.7 + 0.3 * Math.sin(t * 4.1 + config.phase);
+    config.glow.material.opacity = config.baseGlowOpacity * glowPulse;
+    const scale = config.baseGlowScale * (0.9 + pulse * 0.22);
+    config.glow.scale.set(scale, scale, 1);
+  }
 }
 
 function pushFeed(text) {
@@ -1257,13 +1361,34 @@ function spawnMuzzleFlash(origin, dir, options = {}) {
   effects.push({ object: mesh, life: 0.08, maxLife: 0.08, shrink: true });
 }
 
+function renderLocalShotPreview() {
+  const weapon = weapons[currentWeapon];
+  if (!weapon) {
+    return;
+  }
+  const dir = dirFromYawPitch(player.yaw, player.pitch);
+  const origin = getViewModelMuzzleWorldPosition();
+  const muzzleKick = 0.02;
+  spawnMuzzleFlash(origin, dir, { muzzleOffset: muzzleKick, sideOffset: 0 });
+  spawnTracer(origin, dir, weapon.range, {
+    muzzleOffset: muzzleKick,
+    sideOffset: 0,
+    maxLength: 8
+  });
+}
+
 function renderShot(msg) {
   const serverOrigin = new THREE.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
   const isLocal = msg.shooterId === localId;
   const traces = msg.traces || [];
+  const shouldSuppressLocalCosmetics =
+    isLocal && typeof msg.shotId === "number" && pendingLocalShotIds.has(msg.shotId);
+  if (shouldSuppressLocalCosmetics) {
+    pendingLocalShotIds.delete(msg.shotId);
+  }
   const visualOrigin = isLocal ? getViewModelMuzzleWorldPosition() : serverOrigin;
   const muzzleKick = isLocal ? 0.02 : 0.35;
-  if (traces.length > 0) {
+  if (!shouldSuppressLocalCosmetics && traces.length > 0) {
     const baseDir = new THREE.Vector3(
       traces[0].dir.x,
       traces[0].dir.y,
@@ -1277,11 +1402,13 @@ function renderShot(msg) {
   for (const trace of traces) {
     const dir = new THREE.Vector3(trace.dir.x, trace.dir.y, trace.dir.z);
     const distance = typeof trace.distance === "number" ? trace.distance : 0;
-    spawnTracer(visualOrigin, dir, distance, {
-      muzzleOffset: muzzleKick,
-      sideOffset: 0,
-      maxLength: isLocal ? 8 : distance
-    });
+    if (!shouldSuppressLocalCosmetics) {
+      spawnTracer(visualOrigin, dir, distance, {
+        muzzleOffset: muzzleKick,
+        sideOffset: 0,
+        maxLength: isLocal ? 8 : distance
+      });
+    }
     if (trace.impact) {
       const end = serverOrigin.clone().add(dir.clone().multiplyScalar(distance));
       spawnImpact(end, trace.impact.type);
@@ -1637,13 +1764,14 @@ function updateMovement(dt) {
   camera.rotation.set(player.pitch, player.yaw, 0, "YXZ");
 }
 
-function updateRemotePlayers(dt) {
+function updateRemotePlayers(dt, now) {
   for (const entry of remotePlayers.values()) {
     entry.mesh.position.lerp(entry.targetPosition, 0.2);
     entry.mesh.rotation.y = entry.targetYaw;
     const targetScale = getStanceScaleY(entry.stance);
     entry.stanceScale = dampValue(entry.stanceScale ?? 1, targetScale, 18, dt);
     entry.mesh.scale.set(1, entry.stanceScale, 1);
+    updateDiamondShine(entry.mesh, now);
   }
 }
 
@@ -1719,9 +1847,24 @@ function tryShoot(now) {
   state.lastShotAt = now;
   state.ammo -= 1;
   addRecoilImpulse(currentWeapon);
+  renderLocalShotPreview();
 
   if (connected) {
-    socket.send(JSON.stringify({ type: "shoot", stance: player.stance }));
+    const shotId = nextShotId++;
+    if (pendingLocalShotIds.size > 64) {
+      pendingLocalShotIds.clear();
+    }
+    pendingLocalShotIds.add(shotId);
+    socket.send(
+      JSON.stringify({
+        type: "shoot",
+        stance: player.stance,
+        yaw: player.yaw,
+        pitch: player.pitch,
+        position: { x: player.position.x, y: player.position.y, z: player.position.z },
+        shotId
+      })
+    );
   }
 }
 
@@ -1767,7 +1910,7 @@ function animate(now) {
   updateMovement(dt);
   updateWeapon(now);
   updateRecoil(dt);
-  updateRemotePlayers(dt);
+  updateRemotePlayers(dt, now);
   updateEffects(dt);
   updateGrenades(dt);
   updateFlash(now);
