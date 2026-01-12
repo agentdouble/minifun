@@ -9,6 +9,8 @@ npm install
 npm start
 ```
 
+Windows: lance `start.bat` (ou `.\start.bat` dans un terminal).
+
 Ouvre ensuite `http://<ip-de-la-machine>:3000` sur chaque ordinateur du reseau local.
 
 ## Commandes
@@ -31,3 +33,9 @@ Ouvre ensuite `http://<ip-de-la-machine>:3000` sur chaque ordinateur du reseau l
 - Fusil : automatique, fiable a moyenne distance
 - Sniper : longue portee avec viseur
 - Pompe : devastateur a courte portee
+
+
+## A faire
+
+- Camera en dezoom quand on court
+- Quand on meurt, l'ecran devient un plus plus sombre avec un texte qui apparait et la camera passe en vue 3eme personne sur celui qui nous a tué

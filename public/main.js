@@ -12,6 +12,8 @@ const crosshairEl = document.getElementById("crosshair");
 const scopeEl = document.getElementById("scope");
 const flashEl = document.getElementById("flash");
 const flashStatusEl = document.getElementById("flash-status");
+const damageVignetteEl = document.getElementById("damage-vignette");
+const lowHealthEl = document.getElementById("low-health");
 const nameInput = document.getElementById("player-name");
 const sensitivityInput = document.getElementById("sensitivity");
 const sensitivityValueEl = document.getElementById("sensitivity-value");
@@ -314,6 +316,8 @@ let aimHeld = false;
 let aiming = false;
 let leaderboardHeld = false;
 let lastSentName = null;
+let lastLocalHealth = null;
+let damageVignetteTimer = null;
 
 const LOOK_SENSITIVITY = {
   normal: 0.002,
@@ -740,7 +744,13 @@ function updatePlayers(players) {
 
 function updateLocalState(state) {
   if (typeof state.health === "number") {
-    healthEl.textContent = `${Math.max(0, Math.round(state.health))} PV`;
+    const clampedHealth = Math.max(0, state.health);
+    if (lastLocalHealth !== null && clampedHealth < lastLocalHealth) {
+      triggerDamageVignette();
+    }
+    lastLocalHealth = clampedHealth;
+    updateLowHealthEffect(clampedHealth);
+    healthEl.textContent = `${Math.max(0, Math.round(clampedHealth))} PV`;
   }
   if (typeof state.dead === "boolean") {
     if (state.dead && !localDead) {
@@ -998,6 +1008,50 @@ function showHitmarker(kind = "player") {
   }, 160);
 }
 
+function triggerDamageVignette() {
+  if (!damageVignetteEl) {
+    return;
+  }
+  damageVignetteEl.classList.add("active");
+  if (damageVignetteTimer) {
+    clearTimeout(damageVignetteTimer);
+  }
+  damageVignetteTimer = setTimeout(() => {
+    damageVignetteEl.classList.remove("active");
+    damageVignetteTimer = null;
+  }, 220);
+}
+
+function getLowHealthOpacity(health) {
+  const ratio = THREE.MathUtils.clamp(health / 100, 0, 1);
+  const start = 0.75;
+  if (ratio >= start) {
+    return 0;
+  }
+  const t = (start - ratio) / start;
+  return THREE.MathUtils.clamp(Math.pow(t, 0.7), 0, 1);
+}
+
+function getLowHealthBlur(health) {
+  const ratio = THREE.MathUtils.clamp(health / 100, 0, 1);
+  const start = 0.2;
+  if (ratio >= start) {
+    return 0;
+  }
+  const t = (start - ratio) / start;
+  return THREE.MathUtils.clamp(Math.pow(t, 0.85), 0, 1);
+}
+
+function updateLowHealthEffect(health) {
+  if (!lowHealthEl) {
+    return;
+  }
+  const opacity = getLowHealthOpacity(health);
+  const blur = getLowHealthBlur(health);
+  lowHealthEl.style.setProperty("--low-health", opacity.toFixed(3));
+  lowHealthEl.style.setProperty("--low-health-blur", blur.toFixed(3));
+}
+
 function flashTarget(targetId) {
   const entry = targets.get(targetId);
   if (!entry) {
@@ -1087,9 +1141,10 @@ function isFlashOccluded(origin, target, distance) {
 }
 
 function computeFlashStrength(origin, radius) {
+  const stance = getStanceProfile();
   const eye = new THREE.Vector3(
     player.position.x,
-    player.position.y + EYE_HEIGHT,
+    player.position.y + stance.eyeHeight,
     player.position.z
   );
   const toFlash = new THREE.Vector3().subVectors(origin, eye);

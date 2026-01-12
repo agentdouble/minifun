@@ -368,6 +368,44 @@ button#play:hover {
   opacity: 1;
 }
 
+.low-health,
+.damage-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 3;
+}
+
+.low-health {
+  --low-health: 0;
+  --low-health-blur: 0;
+  opacity: var(--low-health);
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 45%,
+    rgba(255, 70, 70, 0.2) 72%,
+    rgba(120, 0, 0, 0.6) 100%
+  );
+  -webkit-backdrop-filter: blur(calc(3px * var(--low-health-blur)));
+  backdrop-filter: blur(calc(3px * var(--low-health-blur)));
+  transition: opacity 0.2s ease, backdrop-filter 0.2s ease, -webkit-backdrop-filter 0.2s ease;
+}
+
+.damage-vignette {
+  opacity: 0;
+  background: radial-gradient(
+    circle at center,
+    rgba(0, 0, 0, 0) 52%,
+    rgba(255, 80, 80, 0.35) 78%,
+    rgba(160, 0, 0, 0.75) 100%
+  );
+  transition: opacity 0.18s ease;
+}
+
+.damage-vignette.active {
+  opacity: 1;
+}
+
 .flash {
   position: absolute;
   inset: 0;
