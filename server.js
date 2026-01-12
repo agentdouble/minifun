@@ -526,7 +526,7 @@ function resolveImpact(origin, dir, weapon, shooterId) {
   return { distance: weapon.range, impact: null };
 }
 
-function handleShoot(player) {
+function handleShoot(player, shotId) {
   if (player.dead) {
     return;
   }
@@ -602,14 +602,18 @@ function handleShoot(player) {
     }
   }
 
-  broadcast({
+  const payload = {
     type: "shot",
     shooterId: player.id,
     origin,
     weapon: player.weapon,
     traces,
     hits
-  });
+  };
+  if (Number.isInteger(shotId)) {
+    payload.shotId = shotId;
+  }
+  broadcast(payload);
 }
 
 wss.on("connection", (ws) => {
@@ -679,7 +683,19 @@ wss.on("connection", (ws) => {
       if (typeof msg.stance === "string") {
         current.stance = normalizeStance(msg.stance);
       }
-      handleShoot(current);
+      if (msg.position) {
+        current.position.x = clamp(msg.position.x, MAP.bounds.minX, MAP.bounds.maxX);
+        current.position.y = clamp(msg.position.y, 0, 5);
+        current.position.z = clamp(msg.position.z, MAP.bounds.minZ, MAP.bounds.maxZ);
+      }
+      if (typeof msg.yaw === "number") {
+        current.yaw = msg.yaw;
+      }
+      if (typeof msg.pitch === "number") {
+        current.pitch = clamp(msg.pitch, -1.3, 1.3);
+      }
+      const shotId = Number.isInteger(msg.shotId) ? msg.shotId : null;
+      handleShoot(current, shotId);
     }
 
     if (msg.type === "switch_weapon") {
