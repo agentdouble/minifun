@@ -314,6 +314,8 @@ let aimHeld = false;
 let aiming = false;
 let leaderboardHeld = false;
 let lastSentName = null;
+let nextShotId = 1;
+const pendingLocalShotIds = new Set();
 
 const LOOK_SENSITIVITY = {
   normal: 0.002,
@@ -1202,13 +1204,34 @@ function spawnMuzzleFlash(origin, dir, options = {}) {
   effects.push({ object: mesh, life: 0.08, maxLife: 0.08, shrink: true });
 }
 
+function renderLocalShotPreview() {
+  const weapon = weapons[currentWeapon];
+  if (!weapon) {
+    return;
+  }
+  const dir = dirFromYawPitch(player.yaw, player.pitch);
+  const origin = getViewModelMuzzleWorldPosition();
+  const muzzleKick = 0.02;
+  spawnMuzzleFlash(origin, dir, { muzzleOffset: muzzleKick, sideOffset: 0 });
+  spawnTracer(origin, dir, weapon.range, {
+    muzzleOffset: muzzleKick,
+    sideOffset: 0,
+    maxLength: 8
+  });
+}
+
 function renderShot(msg) {
   const serverOrigin = new THREE.Vector3(msg.origin.x, msg.origin.y, msg.origin.z);
   const isLocal = msg.shooterId === localId;
   const traces = msg.traces || [];
+  const shouldSuppressLocalCosmetics =
+    isLocal && typeof msg.shotId === "number" && pendingLocalShotIds.has(msg.shotId);
+  if (shouldSuppressLocalCosmetics) {
+    pendingLocalShotIds.delete(msg.shotId);
+  }
   const visualOrigin = isLocal ? getViewModelMuzzleWorldPosition() : serverOrigin;
   const muzzleKick = isLocal ? 0.02 : 0.35;
-  if (traces.length > 0) {
+  if (!shouldSuppressLocalCosmetics && traces.length > 0) {
     const baseDir = new THREE.Vector3(
       traces[0].dir.x,
       traces[0].dir.y,
@@ -1222,11 +1245,13 @@ function renderShot(msg) {
   for (const trace of traces) {
     const dir = new THREE.Vector3(trace.dir.x, trace.dir.y, trace.dir.z);
     const distance = typeof trace.distance === "number" ? trace.distance : 0;
-    spawnTracer(visualOrigin, dir, distance, {
-      muzzleOffset: muzzleKick,
-      sideOffset: 0,
-      maxLength: isLocal ? 8 : distance
-    });
+    if (!shouldSuppressLocalCosmetics) {
+      spawnTracer(visualOrigin, dir, distance, {
+        muzzleOffset: muzzleKick,
+        sideOffset: 0,
+        maxLength: isLocal ? 8 : distance
+      });
+    }
     if (trace.impact) {
       const end = serverOrigin.clone().add(dir.clone().multiplyScalar(distance));
       spawnImpact(end, trace.impact.type);
@@ -1664,9 +1689,24 @@ function tryShoot(now) {
   state.lastShotAt = now;
   state.ammo -= 1;
   addRecoilImpulse(currentWeapon);
+  renderLocalShotPreview();
 
   if (connected) {
-    socket.send(JSON.stringify({ type: "shoot", stance: player.stance }));
+    const shotId = nextShotId++;
+    if (pendingLocalShotIds.size > 64) {
+      pendingLocalShotIds.clear();
+    }
+    pendingLocalShotIds.add(shotId);
+    socket.send(
+      JSON.stringify({
+        type: "shoot",
+        stance: player.stance,
+        yaw: player.yaw,
+        pitch: player.pitch,
+        position: { x: player.position.x, y: player.position.y, z: player.position.z },
+        shotId
+      })
+    );
   }
 }
 
